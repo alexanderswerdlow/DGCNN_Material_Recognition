@@ -2,22 +2,41 @@ import os.path as osp
 
 import torch
 import torch.nn.functional as F
-from torch.nn import Linear
-
+import numpy as np
 import torch_geometric.transforms as T
 from geomat import GeoMat
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import MLP, DynamicEdgeConv, global_max_pool
+import sklearn.metrics as metrics
+from torch.utils.tensorboard import SummaryWriter
+import shutil
+import os.path
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
 train_dataset = GeoMat(path, True, transform, pre_transform)
 test_dataset = GeoMat(path, False, transform, pre_transform)
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=6)
-test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False, num_workers=6)
+train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=6)
+test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=6)
+
+
+def save_ckp(state, is_best, checkpoint_dir):
+    f_path = f"{checkpoint_dir}/checkpoint.pt"
+    torch.save(state, f_path)
+    if is_best:
+        shutil.copyfile(f_path, f"{checkpoint_dir}/best_model.pt")
+
+
+def load_ckp(checkpoint_fpath, model, optimizer, scheduler):
+    checkpoint = torch.load(checkpoint_fpath)
+    model.load_state_dict(checkpoint["state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    scheduler.load_state_dict(checkpoint["scheduler"])
+    return model, optimizer, checkpoint["epoch"]
+
 
 def criterion(pred, gold, smoothing=True):
-    ''' Calculate cross entropy loss, apply label smoothing if needed. '''
+    """Calculate cross entropy loss, apply label smoothing if needed."""
 
     gold = gold.contiguous().view(-1)
 
@@ -31,7 +50,7 @@ def criterion(pred, gold, smoothing=True):
 
         loss = -(one_hot * log_prb).sum(dim=1).mean()
     else:
-        loss = F.cross_entropy(pred, gold, reduction='mean')
+        loss = F.cross_entropy(pred, gold, reduction="mean")
 
     return loss
 
@@ -59,25 +78,25 @@ class Net(torch.nn.Module):
         return F.log_softmax(out, dim=1)
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = Net(in_channels=6, out_channels=19, k=20).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
-
-
 def train():
     model.train()
 
-    total_loss = 0
+    train_loss, train_pred, train_true = 0, [], []
     for data in train_loader:
         data = data.to(device)
         optimizer.zero_grad()
         out = model(data)
         loss = criterion(out, data.y)
         loss.backward()
-        total_loss += loss.item() * data.num_graphs
         optimizer.step()
-    return total_loss / len(train_dataset)
+        preds = out.max(dim=1)[1]
+        train_loss += loss.item() * data.num_graphs
+        train_true.append(data.y.cpu().numpy())
+        train_pred.append(preds.detach().cpu().numpy())
+
+    train_true = np.concatenate(train_true)
+    train_pred = np.concatenate(train_pred)
+    return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred)
 
 
 def test(loader):
@@ -92,8 +111,33 @@ def test(loader):
     return correct / len(loader.dataset)
 
 
-for epoch in range(1, 201):
-    loss = train()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = Net(in_channels=6, out_channels=19, k=20).to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+last_checkpoint = "data/checkpoints/best_model.pt"
+
+if os.path.isfile(last_checkpoint):
+    model, optimizer, start_epoch = load_ckp(last_checkpoint, model, optimizer, scheduler)
+else:
+    start_epoch = 1
+
+writer = SummaryWriter()
+best_test_acc = 0
+for epoch in range(start_epoch, 201):
+    loss, train_acc, balanced_train_acc = train()
     test_acc = test(test_loader)
-    print(f"Epoch {epoch:03d}, Loss: {loss:.4f}, Test: {test_acc:.4f}")
+    print(f"Epoch {epoch:03d}, Train Loss: {loss:.4f}, Train Acc: {train_acc:.4f}, Balanced Train Acc: {balanced_train_acc:.4f}, Test: {test_acc:.4f}")
     scheduler.step()
+
+    writer.add_scalar("Loss/train", loss, epoch)
+    writer.add_scalar("Accuracy/train", train_acc, epoch)
+    writer.add_scalar("Balanced_Accuracy/train", balanced_train_acc, epoch)
+    writer.add_scalar("Accuracy/test", test_acc, epoch)
+
+    checkpoint = {"epoch": epoch + 1, "state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict()}
+    save_ckp(checkpoint, test_acc >= best_test_acc, "data/checkpoints")
+
+    best_test_acc = max(test_acc, best_test_acc)
+
+writer.close()

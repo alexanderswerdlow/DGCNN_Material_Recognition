@@ -12,22 +12,15 @@ class GeoMat(Dataset):
     def __init__(self, root, train=True, transform=None,
                 pre_transform=None, pre_filter=None):
 
-        with open(osp.join(root, 'raw_train.txt'), 'r') as f:
-            self.train_raw = [fn.strip() for fn in f.readlines()]
-        with open(osp.join(root, 'raw_test.txt'), 'r') as f:
-            self.test_raw = [fn.strip() for fn in f.readlines()]
-        with open(osp.join(root, 'processed_train.txt'), 'r') as f:
-            self.train_proc = [fn.strip() for fn in f.readlines()]
-        with open(osp.join(root, 'processed_test.txt'), 'r') as f:
-            self.test_proc = [fn.strip() for fn in f.readlines()]
+        self.train_raw = self.read_txt(osp.join(root, 'raw_train.txt'))
+        self.test_raw = self.read_txt(osp.join(root, 'raw_test.txt'))
+        self.train_proc = self.read_txt(osp.join(root, 'processed_train.txt'))
+        self.test_proc = self.read_txt(osp.join(root, 'processed_test.txt'))
 
         super().__init__(root, transform, pre_transform, pre_filter)
         self.train = train
-        if self.train:
-            self.data = self.train_proc
-        else:
-            self.data = self.test_proc
-    
+        self.data = self.train_proc if self.train else self.test_proc
+
     @property
     def raw_file_names(self):
         return self.train_raw + self.test_raw
@@ -35,11 +28,13 @@ class GeoMat(Dataset):
     @property
     def processed_file_names(self):
         return self.train_proc + self.test_proc
+    
+    def read_txt(self, txt):
+        with open(txt, 'r') as f:
+            return [fn.strip() for fn in f.readlines()]
 
     def len(self):
-        if self.train:
-            return len(self.train_raw)
-        return len(self.test_raw)
+        return len(self.data)
 
     def get(self, idx):
         fn = self.data[idx]

@@ -77,10 +77,7 @@ class GeoMat(Dataset):
             pointcloud_rgb = torch.from_numpy(np.asarray(pcd.colors))
             # TODO: Add surface normals at some point ofc, we prob don't need intrinsics in xs, maybe later we'll generate mesh using open3d, that I can look into
 
-            x = torch.cat((pointcloud, pointcloud_rgb), dim=1)
-            y = label
-
-            data = Data(pos=x[:, :3], x=x[:, 3:], y=y)
+            data = Data(pos=pointcloud, x=pointcloud_rgb, y=label)
 
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue

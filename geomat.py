@@ -4,13 +4,83 @@ import scipy.io as sio
 import torch
 import numpy as np
 import open3d as o3d
-
+import timm
+from timm.data.transforms_factory import create_transform
+from timm.data import resolve_data_config
+from PIL import Image
+import torchvision
 from torch_geometric.data import (Data, Dataset)
+
+_cache_ = {
+  'memory_allocated': 0,
+  'max_memory_allocated': 0,
+  'memory_reserved': 0,
+  'max_memory_reserved': 0,
+}
+
+def _get_memory_info(info_name, unit):
+
+  tab = '\t'
+  if info_name == 'memory_allocated':
+    current_value = torch.cuda.memory.memory_allocated()
+  elif info_name == 'max_memory_allocated':
+    current_value = torch.cuda.memory.max_memory_allocated()
+  elif info_name == 'memory_reserved':
+    tab = '\t\t'
+    current_value = torch.cuda.memory.memory_reserved()
+  elif info_name == 'max_memory_reserved':
+    current_value = torch.cuda.memory.max_memory_reserved()
+  else:
+    raise ValueError()
+
+  divisor = 1
+  if unit.lower() == 'kb':
+    divisor = 1024
+  elif unit.lower() == 'mb':
+    divisor = 1024*1024
+  elif unit.lower() == 'gb':
+    divisor = 1024*1024*1024
+  else:
+    raise ValueError()
+
+  diff_value = current_value - _cache_[info_name]
+  _cache_[info_name] = current_value
+
+  return f"{info_name}: \t {current_value} ({current_value/divisor:.3f} {unit.upper()})" \
+         f"\t diff_{info_name}: {diff_value} ({diff_value/divisor:.3f} {unit.upper()})"
+
+def print_memory_info(unit='kb'):
+
+  print(_get_memory_info('memory_allocated', unit))
+  print(_get_memory_info('max_memory_allocated', unit))
+  print(_get_memory_info('memory_reserved', unit))
+  print(_get_memory_info('max_memory_reserved', unit))
+  print('')
+class MyData(Data):
+    def __cat_dim__(self, key, value, *args, **kwargs):
+        if key == 'image':
+            return None
+        else:
+            return super().__cat_dim__(key, value, *args, **kwargs)
+
+
+def create_point_cloud_depth(img, depth, fx, fy, cx, cy):
+    depth_shape = depth.shape
+    [x_d, y_d] = np.meshgrid(range(0, depth_shape[1]), range(0, depth_shape[0]))
+    x3 = np.divide(np.multiply((x_d-cx), depth), fx)
+    y3 = np.divide(np.multiply((y_d-cy), depth), fy)
+    z3 = depth
+
+    # valid_depth_ind = np.where(depth.flatten() > 0)[0]
+    # camera_points = camera_points[valid_depth_ind,:]
+    # color_points = color_points[valid_depth_ind,:]
+
+    return np.stack((x3, y3, z3), axis=2).reshape(-1,3), img.reshape(-1, img.shape[-1])
 
 class GeoMat(Dataset):
 
     def __init__(self, root, train=True, transform=None,
-                pre_transform=None, pre_filter=None):
+                pre_transform=None, pre_filter=None, feature_extraction=False):
 
         self.train_raw = self.read_txt(osp.join(root, 'raw_train.txt'))
         self.test_raw = self.read_txt(osp.join(root, 'raw_test.txt'))
@@ -20,6 +90,21 @@ class GeoMat(Dataset):
         super().__init__(root, transform, pre_transform, pre_filter)
         self.train = train
         self.data = self.train_proc if self.train else self.test_proc
+
+        self.feature_extraction = feature_extraction
+
+        if self.feature_extraction:
+          self.rgb_shape = np.empty((100, 100)).shape
+          self.boxes = np.zeros((self.rgb_shape[0], self.rgb_shape[1], 5))
+          for i in range(self.rgb_shape[0]):
+              for j in range(self.rgb_shape[1]):
+                  self.boxes[i][j][1:] = np.array([i, j, i + 1, j + 1])
+
+          self.boxes = torch.from_numpy(self.boxes.reshape(-1, 5)).float().cuda()
+          self.img_model = timm.create_model('efficientnet_b3a', features_only=True, pretrained=True).cuda()
+          self.img_model.eval()
+          self.img_config = resolve_data_config({}, model=self.img_model)
+          self.img_transform = create_transform(**self.img_config)
 
     @property
     def raw_file_names(self):
@@ -38,7 +123,13 @@ class GeoMat(Dataset):
 
     def get(self, idx):
         fn = self.data[idx]
-        return torch.load(osp.join(self.processed_dir, fn))
+        data = torch.load(osp.join(self.processed_dir, fn), map_location='cpu')
+        if self.feature_extraction:
+          _, _, _, img = data.pos, data.x, data.batch, data.image
+          img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
+          unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
+          data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
+        return data
     
     def process(self):
 
@@ -55,29 +146,9 @@ class GeoMat(Dataset):
             intrinsics = f['Intrinsics'].astype(np.float64) # 3x3
             extrinsics = np.vstack([f['Extrinsics'].astype(np.float64), [0, 0, 0, 1]]) # 3x4
 
-            # TODO: Since we invert depth here, we probably need to invert z coord in extrinsic...
-            im_rgb, im_depth = o3d.geometry.Image(rgb), o3d.geometry.Image(-depth)
-            rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(im_rgb, im_depth, convert_rgb_to_intensity=False)
-
-            # width, height, fx, fy, cx, cy
-            intrinsics = o3d.camera.PinholeCameraIntrinsic(rgb.shape[1], rgb.shape[0], intrinsics[0,0], intrinsics[1,1], intrinsics[0,2], intrinsics[1,2])
-            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, intrinsics, extrinsics, project_valid_depth_only=True)
-
-            # breakpoint()
-            # o3d.visualization.draw_geometries([pcd]) # uncomment for viz
-
-            # pcd.estimate_normals()
-            # distances = pcd.compute_nearest_neighbor_distance()
-            # avg_dist = np.mean(distances)
-            # radius = 1.5 * avg_dist
-            # mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pcd,o3d.utility.DoubleVector([radius, radius * 2]))
-
-            # pcd.points is n x 3, pcd.colors is n x 3 (I'm pretty sure RGB [0, 1])
-            pointcloud = torch.from_numpy(np.asarray(pcd.points))
-            pointcloud_rgb = torch.from_numpy(np.asarray(pcd.colors))
-            # TODO: Add surface normals at some point ofc, we prob don't need intrinsics in xs, maybe later we'll generate mesh using open3d, that I can look into
-
-            data = Data(pos=pointcloud, x=pointcloud_rgb, y=label)
+            depth_, img_ = create_point_cloud_depth(rgb, -depth, intrinsics[0,0], intrinsics[1,1], intrinsics[0,2], intrinsics[1,2])
+            data = MyData(pos=torch.from_numpy(depth_), x=torch.from_numpy(img_), y=label)
+            data.image = torch.from_numpy(rgb)
 
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue

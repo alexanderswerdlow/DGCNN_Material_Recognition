@@ -11,6 +11,7 @@ import sklearn.metrics as metrics
 from torch.utils.tensorboard import SummaryWriter
 import shutil
 import os.path
+from util import load_ckp, save_ckp, criterion
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
@@ -18,41 +19,6 @@ train_dataset = GeoMat(path, True, transform, pre_transform)
 test_dataset = GeoMat(path, False, transform, pre_transform)
 train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=6)
 test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=6)
-
-
-def save_ckp(state, is_best, checkpoint_dir):
-    f_path = f"{checkpoint_dir}/checkpoint.pt"
-    torch.save(state, f_path)
-    if is_best:
-        shutil.copyfile(f_path, f"{checkpoint_dir}/best_model.pt")
-
-
-def load_ckp(checkpoint_fpath, model, optimizer, scheduler):
-    checkpoint = torch.load(checkpoint_fpath)
-    model.load_state_dict(checkpoint["state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizer"])
-    scheduler.load_state_dict(checkpoint["scheduler"])
-    return model, optimizer, checkpoint["epoch"]
-
-
-def criterion(pred, gold, smoothing=True):
-    """Calculate cross entropy loss, apply label smoothing if needed."""
-
-    gold = gold.contiguous().view(-1)
-
-    if smoothing:
-        eps = 0.2
-        n_class = pred.size(1)
-
-        one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
-        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
-        log_prb = F.log_softmax(pred, dim=1)
-
-        loss = -(one_hot * log_prb).sum(dim=1).mean()
-    else:
-        loss = F.cross_entropy(pred, gold, reduction="mean")
-
-    return loss
 
 
 class Net(torch.nn.Module):
@@ -115,7 +81,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = Net(in_channels=6, out_channels=19, k=20).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
-last_checkpoint = "data/checkpoints/best_model.pt"
+model_name = os.path.basename(__file__).rstrip(".py")
+last_checkpoint = f"data/checkpoints/{model_name}_best_model.pt"
 
 if os.path.isfile(last_checkpoint):
     model, optimizer, start_epoch = load_ckp(last_checkpoint, model, optimizer, scheduler)
@@ -136,7 +103,7 @@ for epoch in range(start_epoch, 201):
     writer.add_scalar("Accuracy/test", test_acc, epoch)
 
     checkpoint = {"epoch": epoch + 1, "state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict()}
-    save_ckp(checkpoint, test_acc >= best_test_acc, "data/checkpoints")
+    save_ckp(checkpoint, test_acc >= best_test_acc, "data/checkpoints", model_name)
 
     best_test_acc = max(test_acc, best_test_acc)
 

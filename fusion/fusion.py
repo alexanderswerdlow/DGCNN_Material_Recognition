@@ -1,4 +1,5 @@
 import os.path as osp
+
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -16,30 +17,6 @@ train_dataset = GeoMat(path, True, transform, pre_transform)
 test_dataset = GeoMat(path, False, transform, pre_transform)
 train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=6)
 test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=6)
-
-
-class Net(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, k=20, aggr="max"):
-        super().__init__()
-
-        self.conv1 = DynamicEdgeConv(MLP([2 * in_channels, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
-        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
-        self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
-        self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
-        self.fc1 = MLP([64 + 64 + 128 + 256, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5)
-        self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.5)
-
-    def forward(self, data):
-        pos, x, batch = data.pos, data.x, data.batch
-        x1 = self.conv1(torch.cat((pos, x), dim=1).float(), batch)
-        x2 = self.conv2(x1, batch)
-        x3 = self.conv3(x2, batch)
-        x4 = self.conv4(x3, batch)
-        out = self.fc1(torch.cat((x1, x2, x3, x4), dim=1))
-        out = global_max_pool(out, batch)
-        out = self.fc2(out)
-        return F.log_softmax(out, dim=1)
-
 
 def train():
     model.train()
@@ -62,16 +39,16 @@ def train():
     return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred)
 
 
-def test():
+def test(loader):
     model.eval()
 
     correct = 0
-    for data in test_loader:
+    for data in loader:
         data = data.to(device)
         with torch.no_grad():
             pred = model(data).max(dim=1)[1]
         correct += pred.eq(data.y).sum().item()
-    return correct / len(test_loader.dataset)
+    return correct / len(loader.dataset)
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

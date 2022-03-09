@@ -23,10 +23,10 @@ test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=
 class Net(torch.nn.Module):
     def __init__(self, in_channels, out_channels, k=20, aggr="max"):
         super().__init__()
-        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 136), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
-        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
-        self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
-        self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
+        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 136), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
+        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.7), k, aggr)
+        self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.6), k, aggr)
+        self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.6), k, aggr)
         self.fc1 = MLP([64 + 64 + 128 + 256, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5)
         self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.5)
 
@@ -63,16 +63,16 @@ def train():
     return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred)
 
 
-def test(loader):
+def test():
     model.eval()
 
     correct = 0
-    for data in loader:
+    for data in test_loader:
         data = data.to(device)
         with torch.no_grad():
             pred = model(data).max(dim=1)[1]
         correct += pred.eq(data.y).sum().item()
-    return correct / len(loader.dataset)
+    return correct / len(test_loader.dataset)
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

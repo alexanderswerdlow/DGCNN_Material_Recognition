@@ -1,7 +1,9 @@
+from tracemalloc import start
 import torch
 import torch.nn.functional as F
 import shutil
-
+from torch.utils.tensorboard import SummaryWriter
+import os
 
 def save_ckp(state, is_best, checkpoint_dir, model_name):
     f_path = f"{checkpoint_dir}/{model_name}_checkpoint.pt"
@@ -36,3 +38,35 @@ def criterion(pred, gold, smoothing=True):
         loss = F.cross_entropy(pred, gold, reduction="mean")
 
     return loss
+
+
+def get_writer(model_name):
+    return SummaryWriter(log_dir=f'runs/{model_name}')
+
+
+def run_training(model_name, train, test, model, optimizer, scheduler, total_epochs):
+    last_checkpoint = f"data/checkpoints/{model_name}_best_model.pt"
+    if os.path.isfile(last_checkpoint):
+        model, optimizer, start_epoch = load_ckp(last_checkpoint, model, optimizer, scheduler)
+    else:
+        start_epoch = 1
+    writer = get_writer(model_name)
+    best_test_acc = 0
+    print(f'Starting at epoch {start_epoch}')
+    for epoch in range(start_epoch, total_epochs - 1):
+        loss, train_acc, balanced_train_acc = train()
+        test_acc = test()
+        print(f"Epoch {epoch:03d}, Train Loss: {loss:.4f}, Train Acc: {train_acc:.4f}, Balanced Train Acc: {balanced_train_acc:.4f}, Test: {test_acc:.4f}")
+        scheduler.step()
+
+        writer.add_scalar("Loss/train", loss, epoch)
+        writer.add_scalar("Accuracy/train", train_acc, epoch)
+        writer.add_scalar("Balanced_Accuracy/train", balanced_train_acc, epoch)
+        writer.add_scalar("Accuracy/test", test_acc, epoch)
+
+        checkpoint = {"epoch": epoch + 1, "state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict()}
+        save_ckp(checkpoint, test_acc >= best_test_acc, "data/checkpoints", model_name)
+
+        best_test_acc = max(test_acc, best_test_acc)
+
+    writer.close()

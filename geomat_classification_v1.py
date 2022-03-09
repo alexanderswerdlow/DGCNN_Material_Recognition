@@ -1,5 +1,4 @@
 import os.path as osp
-
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -8,10 +7,8 @@ from geomat import GeoMat
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import MLP, DynamicEdgeConv, global_max_pool
 import sklearn.metrics as metrics
-from torch.utils.tensorboard import SummaryWriter
-import shutil
 import os.path
-from util import load_ckp, save_ckp, criterion
+from util import criterion, run_training
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
@@ -82,29 +79,5 @@ model = Net(in_channels=6, out_channels=19, k=20).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 model_name = os.path.basename(__file__).rstrip(".py")
-last_checkpoint = f"data/checkpoints/{model_name}_best_model.pt"
 
-if os.path.isfile(last_checkpoint):
-    model, optimizer, start_epoch = load_ckp(last_checkpoint, model, optimizer, scheduler)
-else:
-    start_epoch = 1
-
-writer = SummaryWriter()
-best_test_acc = 0
-for epoch in range(start_epoch, 201):
-    loss, train_acc, balanced_train_acc = train()
-    test_acc = test(test_loader)
-    print(f"Epoch {epoch:03d}, Train Loss: {loss:.4f}, Train Acc: {train_acc:.4f}, Balanced Train Acc: {balanced_train_acc:.4f}, Test: {test_acc:.4f}")
-    scheduler.step()
-
-    writer.add_scalar("Loss/train", loss, epoch)
-    writer.add_scalar("Accuracy/train", train_acc, epoch)
-    writer.add_scalar("Balanced_Accuracy/train", balanced_train_acc, epoch)
-    writer.add_scalar("Accuracy/test", test_acc, epoch)
-
-    checkpoint = {"epoch": epoch + 1, "state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict()}
-    save_ckp(checkpoint, test_acc >= best_test_acc, "data/checkpoints", model_name)
-
-    best_test_acc = max(test_acc, best_test_acc)
-
-writer.close()
+run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200)

@@ -16,17 +16,17 @@ path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
 train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction=True)
 test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction=True)
-train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
-test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=0)
+train_loader = DataLoader(train_dataset, batch_size=9, shuffle=True, num_workers=0)
+test_loader = DataLoader(test_dataset, batch_size=9, shuffle=False, num_workers=0)
 
 
 class Net(torch.nn.Module):
     def __init__(self, in_channels, out_channels, k=20, aggr="max"):
         super().__init__()
-        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 136), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
-        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.7), k, aggr)
-        self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.6), k, aggr)
-        self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.6), k, aggr)
+        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 136), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
+        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
+        self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
+        self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
         self.fc1 = MLP([64 + 64 + 128 + 256, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5)
         self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.5)
 
@@ -76,7 +76,7 @@ def test():
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = Net(in_channels=6, out_channels=19, k=20).to(device)
+model = Net(in_channels=6, out_channels=19, k=40).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 model_name = os.path.basename(__file__).rstrip(".py")

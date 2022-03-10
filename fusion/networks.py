@@ -5,16 +5,11 @@
 
 import torch
 import torch_geometric
-import torch_geometric_extension as ext
+import fusion.torch_geometric_extension as ext
 import torchvision.models as models
 import numpy as np
 import ast
-
-class ImageFeatures(torch.nn.Module):
-    def __init__(self, out_channels):
-        self.model = models.resnet18(num_classes=out_channels, pretrained=True).cuda()
-    def forward(self, input):
-        return self.model(input)
+import timm
 
 class GraphNetwork(torch.nn.Module):
     def __init__(self, config, nfeat, multigpu=False, default_fnet_widths=[128],

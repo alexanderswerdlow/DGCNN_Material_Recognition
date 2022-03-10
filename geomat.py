@@ -9,10 +9,12 @@ from timm.data.transforms_factory import create_transform
 from timm.data import resolve_data_config
 from PIL import Image
 import torchvision
-from torch_geometric.data import (Data, Dataset)
+from torch_geometric.data import Data, Dataset
+
+
 class MyData(Data):
     def __cat_dim__(self, key, value, *args, **kwargs):
-        if key == 'image':
+        if key == "image":
             return None
         else:
             return super().__cat_dim__(key, value, *args, **kwargs)
@@ -21,25 +23,20 @@ class MyData(Data):
 def create_point_cloud_depth(img, depth, fx, fy, cx, cy):
     depth_shape = depth.shape
     [x_d, y_d] = np.meshgrid(range(0, depth_shape[1]), range(0, depth_shape[0]))
-    x3 = np.divide(np.multiply((x_d-cx), depth), fx)
-    y3 = np.divide(np.multiply((y_d-cy), depth), fy)
+    x3 = np.divide(np.multiply((x_d - cx), depth), fx)
+    y3 = np.divide(np.multiply((y_d - cy), depth), fy)
     z3 = depth
 
-    # valid_depth_ind = np.where(depth.flatten() > 0)[0]
-    # camera_points = camera_points[valid_depth_ind,:]
-    # color_points = color_points[valid_depth_ind,:]
+    return np.stack((x3, y3, z3), axis=2), img.reshape(-1, img.shape[-1])
 
-    return np.stack((x3, y3, z3), axis=2).reshape(-1,3), img.reshape(-1, img.shape[-1])
 
 class GeoMat(Dataset):
+    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None, feature_extraction=False):
 
-    def __init__(self, root, train=True, transform=None,
-                pre_transform=None, pre_filter=None, feature_extraction=False):
-
-        self.train_raw = self.read_txt(osp.join(root, 'raw_train.txt'))
-        self.test_raw = self.read_txt(osp.join(root, 'raw_test.txt'))
-        self.train_proc = self.read_txt(osp.join(root, 'processed_train.txt'))
-        self.test_proc = self.read_txt(osp.join(root, 'processed_test.txt'))
+        self.train_raw = self.read_txt(osp.join(root, "raw_train.txt"))
+        self.test_raw = self.read_txt(osp.join(root, "raw_test.txt"))
+        self.train_proc = self.read_txt(osp.join(root, "processed_train.txt"))
+        self.test_proc = self.read_txt(osp.join(root, "processed_test.txt"))
 
         super().__init__(root, transform, pre_transform, pre_filter)
         self.train = train
@@ -48,28 +45,28 @@ class GeoMat(Dataset):
         self.feature_extraction = feature_extraction
 
         if self.feature_extraction:
-          self.rgb_shape = np.empty((100, 100)).shape
-          self.boxes = np.zeros((self.rgb_shape[0], self.rgb_shape[1], 5))
-          for i in range(self.rgb_shape[0]):
-              for j in range(self.rgb_shape[1]):
-                  self.boxes[i][j][1:] = np.array([i, j, i + 1, j + 1])
+            self.rgb_shape = np.empty((100, 100)).shape
+            self.boxes = np.zeros((self.rgb_shape[0], self.rgb_shape[1], 5))
+            for i in range(self.rgb_shape[0]):
+                for j in range(self.rgb_shape[1]):
+                    self.boxes[i][j][1:] = np.array([i, j, i + 1, j + 1])
 
-          self.boxes = torch.from_numpy(self.boxes.reshape(-1, 5)).float().cuda()
-          self.img_model = timm.create_model('efficientnet_b3a', features_only=True, pretrained=True).cuda()
-          self.img_model.eval()
-          self.img_config = resolve_data_config({}, model=self.img_model)
-          self.img_transform = create_transform(**self.img_config)
+            self.boxes = torch.from_numpy(self.boxes.reshape(-1, 5)).float().cuda()
+            self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
+            self.img_model.eval()
+            self.img_config = resolve_data_config({}, model=self.img_model)
+            self.img_transform = create_transform(**self.img_config)
 
     @property
     def raw_file_names(self):
         return self.train_raw + self.test_raw
-        
+
     @property
     def processed_file_names(self):
         return self.train_proc + self.test_proc
-    
+
     def read_txt(self, txt):
-        with open(txt, 'r') as f:
+        with open(txt, "r") as f:
             return [fn.strip() for fn in f.readlines()]
 
     def len(self):
@@ -77,32 +74,33 @@ class GeoMat(Dataset):
 
     def get(self, idx):
         fn = self.data[idx]
-        data = torch.load(osp.join(self.processed_dir, fn), map_location='cpu')
+        data = torch.load(osp.join(self.processed_dir, fn), map_location="cpu")
         if self.feature_extraction:
-          _, _, _, img = data.pos, data.x, data.batch, data.image
-          img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
-          unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
-          data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
+            _, _, _, img = data.pos, data.x, data.batch, data.image
+            img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
+            unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
+            data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
         return data
-    
+
     def process(self):
 
         raw_filenames = self.raw_paths
         processed_filenames = self.processed_paths
 
-        for raw_fn, proc_fn in zip(raw_filenames, processed_filenames):
-
+        for dataset_idx, (raw_fn, proc_fn) in enumerate(zip(raw_filenames, processed_filenames)):
             f = sio.loadmat(raw_fn)
 
-            label = torch.from_numpy(f['Class'][0]).to(torch.long) - 1 # Labeled 1-19 but pytorch functions expect zero-indexing so convert to 0-18
-            depth = np.ascontiguousarray(f['Depth'].astype(np.float32)) # 100x100
-            rgb = np.ascontiguousarray(f['Image']) # 100x100x3
-            intrinsics = f['Intrinsics'].astype(np.float64) # 3x3
-            extrinsics = np.vstack([f['Extrinsics'].astype(np.float64), [0, 0, 0, 1]]) # 3x4
+            label = torch.from_numpy(f["Class"][0]).to(torch.long) - 1  # Labeled 1-19 but pytorch functions expect zero-indexing so convert to 0-18
+            depth = np.ascontiguousarray(f["Depth"].astype(np.float32))  # 100x100
+            rgb = np.ascontiguousarray(f["Image"])  # 100x100x3
+            intrinsics = f["Intrinsics"].astype(np.float64)  # 3x3
+            extrinsics = np.vstack([f["Extrinsics"].astype(np.float64), [0, 0, 0, 1]])  # 3x4
 
-            depth_, img_ = create_point_cloud_depth(rgb, -depth, intrinsics[0,0], intrinsics[1,1], intrinsics[0,2], intrinsics[1,2])
-            data = MyData(pos=torch.from_numpy(depth_), x=torch.from_numpy(img_), y=label)
+            depth_, img_ = create_point_cloud_depth(rgb, -depth, intrinsics[0, 0], intrinsics[1, 1], intrinsics[0, 2], intrinsics[1, 2])
+            data = MyData(pos=torch.from_numpy(depth_.reshape(-1, 3)), x=torch.from_numpy(img_), y=label)
             data.image = torch.from_numpy(rgb)
+            data.dataset_idx = dataset_idx
+            data.img_point_cloud = depth_
 
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue
@@ -111,7 +109,7 @@ class GeoMat(Dataset):
 
             os.makedirs(osp.dirname(proc_fn), exist_ok=True)
             torch.save(data, proc_fn)
-    
+
 
 if __name__ == "__main__":
-    g = GeoMat('data/geomat')
+    g = GeoMat("data/geomat")

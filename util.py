@@ -4,6 +4,14 @@ import torch.nn.functional as F
 import shutil
 from torch.utils.tensorboard import SummaryWriter
 import os
+import os.path as osp
+
+def get_data_dir():
+    return osp.join(osp.dirname(osp.realpath(__file__)), "data")
+
+def get_dataset_dir():
+    return osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
+
 
 def save_ckp(state, is_best, checkpoint_dir, model_name):
     f_path = f"{checkpoint_dir}/{model_name}_checkpoint.pt"
@@ -41,18 +49,18 @@ def criterion(pred, gold, smoothing=True):
 
 
 def get_writer(model_name):
-    return SummaryWriter(log_dir=f'runs/{model_name}')
+    return SummaryWriter(log_dir=f"runs/{model_name}")
 
 
 def run_training(model_name, train, test, model, optimizer, scheduler, total_epochs):
-    last_checkpoint = f"data/checkpoints/{model_name}_best_model.pt"
+    last_checkpoint = f"data/checkpoints/{model_name}_checkpoint.pt"
     if os.path.isfile(last_checkpoint):
         model, optimizer, start_epoch = load_ckp(last_checkpoint, model, optimizer, scheduler)
     else:
         start_epoch = 1
     writer = get_writer(model_name)
     best_test_acc = 0
-    print(f'Starting at epoch {start_epoch}')
+    print(f"Starting at epoch {start_epoch}")
     for epoch in range(start_epoch, total_epochs - 1):
         loss, train_acc, balanced_train_acc = train()
         test_acc = test()

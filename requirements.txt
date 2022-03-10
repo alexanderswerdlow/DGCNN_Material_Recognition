@@ -11,6 +11,7 @@ h5py
 tqdm
 tensorboard
 timm
+transforms3d
 
 -f https://download.pytorch.org/whl/cu113/torch_stable.html
 torch==1.10.2+cu113
@@ -22,4 +23,5 @@ torch-scatter
 torch-sparse
 torch-cluster
 torch-spline-conv
-torch-geometric
+
+git+https://github.com/pyg-team/pytorch_geometric.git

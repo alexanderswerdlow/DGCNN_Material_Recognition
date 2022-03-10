@@ -3,14 +3,13 @@ import os.path as osp
 import scipy.io as sio
 import torch
 import numpy as np
-import open3d as o3d
 import timm
 from timm.data.transforms_factory import create_transform
 from timm.data import resolve_data_config
 from PIL import Image
 import torchvision
 from torch_geometric.data import Data, Dataset
-
+import fusion.convnext
 
 class MyData(Data):
     def __cat_dim__(self, key, value, *args, **kwargs):
@@ -31,7 +30,7 @@ def create_point_cloud_depth(img, depth, fx, fy, cx, cy):
 
 
 class GeoMat(Dataset):
-    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None, feature_extraction=False):
+    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None, feature_extraction=None):
 
         self.train_raw = self.read_txt(osp.join(root, "raw_train.txt"))
         self.test_raw = self.read_txt(osp.join(root, "raw_test.txt"))
@@ -52,7 +51,13 @@ class GeoMat(Dataset):
                     self.boxes[i][j][1:] = np.array([i, j, i + 1, j + 1])
 
             self.boxes = torch.from_numpy(self.boxes.reshape(-1, 5)).float().cuda()
-            self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
+            if self.feature_extraction == 'v2':
+                self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
+            elif self.feature_extraction == 'v3':
+                self.img_model = timm.create_model('convnext_base', pretrained=True, freeze_layers=True).cuda()
+            else:
+                raise Exception('Invalid Feature Extraction Value')
+            
             self.img_model.eval()
             self.img_config = resolve_data_config({}, model=self.img_model)
             self.img_transform = create_transform(**self.img_config)
@@ -78,7 +83,10 @@ class GeoMat(Dataset):
         if self.feature_extraction:
             _, _, _, img = data.pos, data.x, data.batch, data.image
             img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
-            unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
+            if self.feature_extraction == 'v2':
+                unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
+            elif self.feature_extraction == 'v3':
+                unpooled_features = self.img_model.get_features_concat(img_batch.unsqueeze(0))
             data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
         return data
 

@@ -11,6 +11,13 @@ source ./venv/bin/activate
 pip install -r requirements.txt
 ```
 
+To install torch-geometric you may need the following env variables to include cuda as follows:
+```
+export PATH=/usr/local/cuda/bin:$PATH
+export CPATH=/usr/local/cuda/include:$CPATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+```
+
 ## Run instructions
 
 ```shell

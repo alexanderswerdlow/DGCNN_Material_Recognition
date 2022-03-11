@@ -61,7 +61,7 @@ def run_training(model_name, train, test, model, optimizer, scheduler, total_epo
     writer = get_writer(model_name)
     best_test_acc = 0
     print(f"Starting at epoch {start_epoch}")
-    for epoch in range(start_epoch, total_epochs - 1):
+    for epoch in range(start_epoch, total_epochs):
         loss, train_acc, balanced_train_acc = train()
         test_acc = test()
         print(f"Epoch {epoch:03d}, Train Loss: {loss:.4f}, Train Acc: {train_acc:.4f}, Balanced Train Acc: {balanced_train_acc:.4f}, Test: {test_acc:.4f}")

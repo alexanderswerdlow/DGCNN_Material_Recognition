@@ -15,8 +15,8 @@ import timm
 pre_transform = T.NormalizeScale()
 train_dataset = GeoMat(get_dataset_dir(), True, None, pre_transform)
 test_dataset = GeoMat(get_dataset_dir(), False, None, pre_transform)
-train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
-test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=6)
+train_loader = DataLoader(train_dataset, batch_size=84, shuffle=True, num_workers=6)
+test_loader = DataLoader(test_dataset, batch_size=84, shuffle=False, num_workers=6)
 
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 train_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize])
@@ -78,7 +78,7 @@ def extract_features(loader, loader_name):
         input = torch.stack(([val_transform(x_.permute(2, 0, 1).float()) for x_ in data.image])).to(device)
 
         features = model.get_features_concat_pool_only(input)
-        for i in range(0, features.size(0)):
+        for i in range(0, features.shape[0]):
             feature = features[i].view(features.size(1), -1).permute(1, 0)
 
             # We have 100x100 3d points w/896 filters each size 14x14 so we need to pool to go from 100x100 -> 14x14
@@ -86,17 +86,18 @@ def extract_features(loader, loader_name):
             points_torch_32 = points_average(torch.tensor(data.img_point_cloud[i]).permute(2, 0, 1))
             points_d32 = np.reshape(points_torch_32.data.numpy(), (-1, 3))
 
-            save_name = f"{get_data_dir()}/fusion/2d/{data.dataset_idx[i]}.h5"
+            save_name = f"{get_data_dir()}/fusion/2d/{loader_name}/{data.dataset_idx[i]}.h5"
             save_h5_features(save_name, "features", feature.detach().cpu().numpy())
             save_h5_features(save_name, "points", points_d32)
+            save_h5_features(save_name, "label", data.label[0].detach().cpu().numpy())
 
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = timm.create_model("convnext_base", pretrained=True, freeze_layers=True, num_classes=19).cuda()
+    model = timm.create_model("convnext_base", pretrained=True, num_classes=19).cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     model_name = os.path.basename(__file__).rstrip(".py")
-    run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=3)
+    run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=100)
     extract_features(train_loader, 'train')
     extract_features(train_loader, 'test')

@@ -54,7 +54,7 @@ class GeoMat(Dataset):
             if self.feature_extraction == 'v2':
                 self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
             elif self.feature_extraction == 'v3':
-                self.img_model = timm.create_model('convnext_base', pretrained=True, freeze_layers=True).cuda()
+                self.img_model = timm.create_model('convnext_base', pretrained=True).cuda()
             else:
                 raise Exception('Invalid Feature Extraction Value')
             
@@ -82,7 +82,8 @@ class GeoMat(Dataset):
         data = torch.load(osp.join(self.processed_dir, fn), map_location="cpu")
         if self.feature_extraction:
             _, _, _, img = data.pos, data.x, data.batch, data.image
-            img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
+            with torch.no_grad():
+                img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
             if self.feature_extraction == 'v2':
                 unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
             elif self.feature_extraction == 'v3':

@@ -12,20 +12,15 @@ from util import criterion, run_training, get_data_dir
 from tqdm import tqdm
 from fusion.networks import TwoStreamNetwork
 from fusion.fusion_dataset import FusionDataset
+from fusion.radam import RAdam
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 
-transform3d = {"dropout": 0,
-                   "rot": 0,
-                   "mirror": 0}
-
 train_dataset = FusionDataset('train', f'{get_data_dir()}/fusion/3d', f'{get_data_dir()}/fusion/2d')
-train_dataset = FusionDataset('train', f'{get_data_dir()}/fusion/3d', f'{get_data_dir()}/fusion/2d')
+test_dataset = FusionDataset('test', f'{get_data_dir()}/fusion/3d', f'{get_data_dir()}/fusion/2d')
 
-test_dataset = GeoMat(path, False, transform, pre_transform)
 train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=6)
 test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=6)
-
 
 def train():
     model.train()
@@ -61,9 +56,8 @@ def test(loader):
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-classification_model = "a"
-model = TwoStreamNetwork(classification_model, features_b1=128, features_b2=896, rad_fuse_pool=0.24, features_proj_b1=256, features_proj_b2=256, proj_b1=True, proj_b2=True).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+model = TwoStreamNetwork('b,r,gp_avg,d_0.5,f_19_cp_1', features_b1=128, features_b2=896, rad_fuse_pool=0.24, features_proj_b1=256, features_proj_b2=256, proj_b1=True, proj_b2=True).to(device)
+optimizer = torch.optim.RAdam(model.parameters(), betas=(0.9, 0.999), lr=0.001, wd=0.0001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 model_name = os.path.basename(__file__).rstrip(".py")
 

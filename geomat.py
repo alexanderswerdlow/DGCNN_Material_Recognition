@@ -14,6 +14,7 @@ from getHHA import getHHA
 import matplotlib.pyplot as plt
 import augmentations
 import fusion.convnext
+from util import get_data_dir
 
 
 class MyData(Data):
@@ -61,6 +62,10 @@ class GeoMat(Dataset):
                 self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
             elif self.feature_extraction == 'v3':
                 self.img_model = timm.create_model('convnext_base', pretrained=True).cuda()
+            elif self.feature_extraction == 'v4':
+                self.img_model = timm.create_model("convnext_large", pretrained=True, num_classes=19, drop_path_rate=0.8).cuda()
+                checkpoint = torch.load(f'{get_data_dir()}/checkpoints/texture_train_large_best_model.pt')
+                self.img_model.load_state_dict(checkpoint["state_dict"])
             else:
                 raise Exception('Invalid Feature Extraction Value')
             
@@ -92,7 +97,7 @@ class GeoMat(Dataset):
                 img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
             if self.feature_extraction == 'v2':
                 unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
-            elif self.feature_extraction == 'v3':
+            elif self.feature_extraction == 'v3' or self.feature_extraction == 'v4':
                 unpooled_features = self.img_model.get_features_concat(img_batch.unsqueeze(0))
             data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
         if self.transforms3d.items():

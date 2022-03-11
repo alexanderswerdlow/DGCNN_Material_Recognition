@@ -5,22 +5,24 @@ import torch_geometric.transforms as T
 from torch_geometric.loader import DataLoader
 import sklearn.metrics as metrics
 import os.path
-from util import criterion, run_training, get_dataset_dir, get_data_dir
+from util import run_training, get_dataset_dir, get_data_dir
 import torchvision.transforms as transforms
 import h5py
 from geomat import GeoMat
 from tqdm import tqdm
 import timm
+from fusion.radam import RAdam
+from timm.loss import LabelSmoothingCrossEntropy
 
 pre_transform = T.NormalizeScale()
 train_dataset = GeoMat(get_dataset_dir(), True, None, pre_transform)
 test_dataset = GeoMat(get_dataset_dir(), False, None, pre_transform)
-train_loader = DataLoader(train_dataset, batch_size=84, shuffle=True, num_workers=6)
-test_loader = DataLoader(test_dataset, batch_size=84, shuffle=False, num_workers=6)
+train_loader = DataLoader(train_dataset, batch_size=34, shuffle=True, num_workers=6)
+test_loader = DataLoader(test_dataset, batch_size=34, shuffle=False, num_workers=6)
 
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 train_transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize])
-val_transform = transforms.Compose([normalize])
+val_transform = transforms.Compose([transforms.ToTensor(), normalize])
 
 
 def train():
@@ -49,7 +51,7 @@ def test():
     correct = 0
     for data in test_loader:
         with torch.no_grad():
-            input = torch.stack(([val_transform(x_.permute(2, 0, 1).float()) for x_ in data.image])).to(device)
+            input = torch.stack(([val_transform(transforms.ToPILImage()(x_.permute(2, 0, 1))) for x_ in data.image])).to(device)
             pred = model(input).max(dim=1)[1]
         correct += pred.eq(data.y.to(device)).sum().item()
     return correct / len(test_loader.dataset)
@@ -67,16 +69,19 @@ class SaveFeatures:
 
 
 def save_h5_features(fname_h5_feat2d, data_key, data_value):
-    h5_feat = h5py.File(fname_h5_feat2d.strip(), "a")
-    h5_feat.create_dataset(data_key, data=data_value, compression="gzip", compression_opts=4, dtype="float")
-    h5_feat.close()
+    h5_file = h5py.File(fname_h5_feat2d.strip(), "a")
+    try:
+        del h5_file[data_key]
+    except:
+        pass
+    h5_file.create_dataset(data_key, data=data_value, compression="gzip", compression_opts=4, dtype="float")
+    h5_file.close()
 
 
 @torch.no_grad()
 def extract_features(loader, loader_name):
     for _, data in enumerate(loader):
         input = torch.stack(([val_transform(x_.permute(2, 0, 1).float()) for x_ in data.image])).to(device)
-
         features = model.get_features_concat_pool_only(input)
         for i in range(0, features.shape[0]):
             feature = features[i].view(features.size(1), -1).permute(1, 0)
@@ -89,15 +94,16 @@ def extract_features(loader, loader_name):
             save_name = f"{get_data_dir()}/fusion/2d/{loader_name}/{data.dataset_idx[i]}.h5"
             save_h5_features(save_name, "features", feature.detach().cpu().numpy())
             save_h5_features(save_name, "points", points_d32)
-            save_h5_features(save_name, "label", data.label[0].detach().cpu().numpy())
+            save_h5_features(save_name, "label", np.atleast_1d(data.y[0].detach().cpu().numpy()))
 
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = timm.create_model("convnext_base", pretrained=True, num_classes=19).cuda()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    model = timm.create_model("convnext_large", pretrained=True, num_classes=19, drop_path_rate=0.8).cuda()
+    optimizer = RAdam(model.parameters(), lr=0.00005)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+    criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
     model_name = os.path.basename(__file__).rstrip(".py")
     run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=100)
-    extract_features(train_loader, 'train')
-    extract_features(train_loader, 'test')
+    extract_features(train_loader, "train")
+    extract_features(train_loader, "test")

@@ -15,8 +15,8 @@ from fusion.radam import RAdam
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)
-train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v3')
-test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v3')
+train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v4')
+test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v4')
 train_loader = DataLoader(train_dataset, batch_size=6, shuffle=True, num_workers=0)
 test_loader = DataLoader(test_dataset, batch_size=6, shuffle=False, num_workers=0)
 

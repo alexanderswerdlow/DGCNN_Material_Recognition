@@ -62,3 +62,4 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 model_name = os.path.basename(__file__).rstrip(".py")
 
 run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200)
+

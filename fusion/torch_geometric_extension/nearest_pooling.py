@@ -27,7 +27,7 @@ class NVPooling(torch.nn.Module):
 
     def forward(self, data):
 
-        cluster = nn_geometric.voxel_grid(data.pos, data.batch, self.pool_rad,
+        cluster = nn_geometric.voxel_grid(data.pos, self.pool_rad, data.batch, 
                                           start=data.pos.min(dim=0)[0] - self.pool_rad * 0.5,
                                           end=data.pos.max(dim=0)[0] + self.pool_rad * 0.5)
         cluster, perm = consecutive_cluster(cluster)

@@ -1,5 +1,6 @@
 import os
 import os.path as osp
+import random
 import scipy.io as sio
 import torch
 import numpy as np
@@ -9,7 +10,11 @@ from timm.data import resolve_data_config
 from PIL import Image
 import torchvision
 from torch_geometric.data import Data, Dataset
+from getHHA import getHHA
+import matplotlib.pyplot as plt
+import augmentations
 import fusion.convnext
+
 
 class MyData(Data):
     def __cat_dim__(self, key, value, *args, **kwargs):
@@ -30,7 +35,7 @@ def create_point_cloud_depth(img, depth, fx, fy, cx, cy):
 
 
 class GeoMat(Dataset):
-    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None, feature_extraction=None):
+    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None, feature_extraction=False, transforms3d={}):
 
         self.train_raw = self.read_txt(osp.join(root, "raw_train.txt"))
         self.test_raw = self.read_txt(osp.join(root, "raw_test.txt"))
@@ -42,6 +47,7 @@ class GeoMat(Dataset):
         self.data = self.train_proc if self.train else self.test_proc
 
         self.feature_extraction = feature_extraction
+        self.transforms3d = transforms3d
 
         if self.feature_extraction:
             self.rgb_shape = np.empty((100, 100)).shape
@@ -89,6 +95,26 @@ class GeoMat(Dataset):
             elif self.feature_extraction == 'v3':
                 unpooled_features = self.img_model.get_features_concat(img_batch.unsqueeze(0))
             data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
+        if self.transforms3d.items():
+            M = np.eye(3)
+            if "crop"  in self.transforms3d:
+                factor = self.transforms3d["crop"]
+                if factor <= 0:
+                    factor = np.random.randint(low=87.5, high=100, dtype=np.int32)/100
+                data.point_cloud_3d, data.hha =  augmentations.random_crop_3D(data.point_cloud_3d, data.hha, factor)
+            if "dropout" in self.transforms3d:
+                p = self.transforms3d["dropout"]
+                data.point_cloud_3d, data.hha =  augmentations.dropout(data.point_cloud_3d, data.hha, p)
+            if "rotate" in self.transforms3d:
+                M = augmentations.vertical_rot(M)
+            if "mirror" in self.transforms3d:
+                r = random.random()
+                M = augmentations.mirror(r, M)
+            data.point_cloud_3d = data.point_cloud_3d @ M.T
+        data.point_cloud_3d -= np.min(data.point_cloud_3d, axis=0)
+        data.hha = torch.Tensor(data.hha)
+        data.point_cloud_3d = torch.Tensor(data.point_cloud_3d)
+        
         return data
 
     def process(self):
@@ -110,6 +136,10 @@ class GeoMat(Dataset):
             data.image = torch.from_numpy(rgb)
             data.dataset_idx = dataset_idx
             data.img_point_cloud = depth_
+
+            data.point_cloud_3d = depth_.reshape(-1,3)
+            hha_depth = getHHA(intrinsics, -depth, -depth).reshape(-1,3)
+            data.hha = hha_depth
 
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue

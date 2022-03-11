@@ -10,6 +10,9 @@ import torchvision.models as models
 import numpy as np
 import ast
 import timm
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from torch_scatter import scatter
+from torch_cluster import nearest
 
 class GraphNetwork(torch.nn.Module):
     def __init__(self, config, nfeat, multigpu=False, default_fnet_widths=[128],
@@ -453,7 +456,7 @@ class GraphNetwork(torch.nn.Module):
             if self.multigpu is True:
                 if device is None:
                     raise RuntimeError("Multigpu is enabled and layer {} does not have a gpu assigned.".format(d))
-                device = 'cuda:{}'.format(id)
+                device = torch.device("cuda" if torch.cuda.is_available() and device == '0' else "cpu")
                 self.devices.append(device)
                 module = module.to(device)
             self.add_module(str(d), module)
@@ -480,7 +483,8 @@ class GraphNetwork(torch.nn.Module):
                     data = module(data)
 
                 else:
-                    raise RuntimeError("Unknonw data type in forward time in {} module".format(type(module)))
+                    # raise RuntimeError("Unknonw data type in forward time in {} module".format(type(module)))
+                    data.x = module(data.x)
 
             elif type(module) == ext.AGC:
                 data.x = module(data.x, data.edge_index, data.edge_attr.float())

@@ -10,6 +10,9 @@ import torchvision.models as models
 import numpy as np
 import ast
 import timm
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from torch_scatter import scatter
+from torch_cluster import nearest
 
 class GraphNetwork(torch.nn.Module):
     def __init__(self, config, nfeat, multigpu=False, default_fnet_widths=[128],

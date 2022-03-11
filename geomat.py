@@ -90,7 +90,7 @@ class GeoMat(Dataset):
             if "crop"  in self.transforms3d:
                 factor = self.transforms3d["crop"]
                 if factor <= 0:
-                    factor = np.random.randint(low=factor*100, high=100, dtype=np.int)/100
+                    factor = np.random.randint(low=87.5, high=100, dtype=np.int32)/100
                 data.point_cloud_3d, data.hha =  augmentations.random_crop_3D(data.point_cloud_3d, data.hha, factor)
             if "dropout" in self.transforms3d:
                 p = self.transforms3d["dropout"]

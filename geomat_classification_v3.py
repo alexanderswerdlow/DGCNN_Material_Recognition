@@ -13,17 +13,18 @@ import os.path
 from tqdm import tqdm
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
-pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
-train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v2')
-test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v2')
-train_loader = DataLoader(train_dataset, batch_size=9, shuffle=True, num_workers=0)
-test_loader = DataLoader(test_dataset, batch_size=9, shuffle=False, num_workers=0)
+pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)
+train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v3')
+test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v3')
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=0)
+test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False, num_workers=0)
 
 
 class Net(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, k=20, aggr="max"):
+    def __init__(self, in_channels, out_channels, k=20, aggr="max", feat_size=1920):
         super().__init__()
-        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 136), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
+        self.filter_conv = nn.Conv2d(feat_size, 32, 1) # reduce filter size
+        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 32), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
         self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
         self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
         self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
@@ -33,6 +34,7 @@ class Net(torch.nn.Module):
     def forward(self, data):
         # Feature Extraction must be in geomat.py so that torch_geometric can properly sample points
         pos, x, batch, features = data.pos, data.x, data.batch, data.features
+        features = self.filter_conv(torch.unsqueeze(torch.unsqueeze(features, dim=-1), dim=-1)).squeeze()
         x1 = self.conv1(torch.cat((pos, x, features), dim=1).float(), batch)
         x2 = self.conv2(x1, batch)
         x3 = self.conv3(x2, batch)

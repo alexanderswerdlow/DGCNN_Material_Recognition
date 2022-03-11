@@ -570,7 +570,6 @@ class MultiModalGroupFusion(torch.nn.Module):
 class TwoStreamNetwork(torch.nn.Module):
     def __init__(self, graph_net_conf,
                  features_b1, features_b2, rad_fuse_pool,
-                 multigpu,
                  features_proj_b1=64,
                  features_proj_b2=64,
                  proj_b1=True,
@@ -594,7 +593,7 @@ class TwoStreamNetwork(torch.nn.Module):
             self.proj_b2 = None
 
         self.multimodal_gp_fusion = MultiModalGroupFusion(rad_fuse_pool)
-        self.class_network = GraphNetwork(graph_net_conf, features_b1 + features_b2, multigpu)
+        self.class_network = GraphNetwork(graph_net_conf, features_b1 + features_b2)
 
     def forward(self, data_b1, data_b2):
 

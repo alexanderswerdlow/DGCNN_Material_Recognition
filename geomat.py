@@ -4,7 +4,6 @@ import random
 import scipy.io as sio
 import torch
 import numpy as np
-import open3d as o3d
 import timm
 from timm.data.transforms_factory import create_transform
 from timm.data import resolve_data_config
@@ -14,6 +13,7 @@ from torch_geometric.data import Data, Dataset
 from getHHA import getHHA
 import matplotlib.pyplot as plt
 import augmentations
+import fusion.convnext
 
 
 class MyData(Data):
@@ -57,7 +57,13 @@ class GeoMat(Dataset):
                     self.boxes[i][j][1:] = np.array([i, j, i + 1, j + 1])
 
             self.boxes = torch.from_numpy(self.boxes.reshape(-1, 5)).float().cuda()
-            self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
+            if self.feature_extraction == 'v2':
+                self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
+            elif self.feature_extraction == 'v3':
+                self.img_model = timm.create_model('convnext_base', pretrained=True).cuda()
+            else:
+                raise Exception('Invalid Feature Extraction Value')
+            
             self.img_model.eval()
             self.img_config = resolve_data_config({}, model=self.img_model)
             self.img_transform = create_transform(**self.img_config)
@@ -82,8 +88,12 @@ class GeoMat(Dataset):
         data = torch.load(osp.join(self.processed_dir, fn), map_location="cpu")
         if self.feature_extraction:
             _, _, _, img = data.pos, data.x, data.batch, data.image
-            img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
-            unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
+            with torch.no_grad():
+                img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
+            if self.feature_extraction == 'v2':
+                unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
+            elif self.feature_extraction == 'v3':
+                unpooled_features = self.img_model.get_features_concat(img_batch.unsqueeze(0))
             data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
         if self.transforms3d.items():
             M = np.eye(3)

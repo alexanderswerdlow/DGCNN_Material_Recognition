@@ -8,19 +8,13 @@ import sklearn.metrics as metrics
 import os.path
 from util import criterion, run_training, get_dataset_dir, get_data_dir, load_ckp, save_h5_features, SaveFeatures
 from fusion.networks import GraphNetwork
-import torchvision.transforms as transforms
-import h5py
 from geomat import GeoMat
 from tqdm import tqdm
-import timm
 from torch_geometric.utils import to_dense_batch
 
 pre_transform = T.NormalizeScale()
 
-transforms3d = {"crop": 0,
-                "dropout": 0.2,
-                "rotate": 0,
-                "mirror": 0}
+transforms3d = {"crop": 0, "dropout": 0.2, "rotate": 0, "mirror": 0}
 transforms3d = {}
 
 # need to fix transforms (flip, crop, dropout)
@@ -83,7 +77,7 @@ def extract_features(loader, loader_name, nlayer=16):
             for i in range(0, x.size(0)):
                 x_i = x[i, :, :]
                 pos_i = pos[i, :, :]
-                y_i = labels[i].unsqueeze(0).reshape(-1,1)
+                y_i = labels[i].unsqueeze(0).reshape(-1, 1)
 
                 save_name = f"{get_data_dir()}/fusion/3d/{loader_name}/{data.dataset_idx[i]}.h5"
                 save_h5_features(save_name, "points", pos_i.detach().cpu().numpy())
@@ -94,17 +88,17 @@ def extract_features(loader, loader_name, nlayer=16):
 if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #          0                     1   2   3              4                     5   6   7              8                     9   10  11             12                    13  14  15             16                     17  18  19       20      21   
-    conf_3d = 'multigraphconv_9_16_0,b_0,r_0,pnv_max_0.05_0,multigraphconv_9_16_0,b_0,r_0,pnv_max_0.08_0,multigraphconv_9_32_0,b_0,r_0,pnv_max_0.12_0,multigraphconv_9_64_0,b_0,r_0,pnv_max_0.24_0,multigraphconv_9_128_0,b_0,r_0,gp_avg_0,d_0.2_0,f_19_cp_0'
+    #          0                     1   2   3              4                     5   6   7              8                     9   10  11             12                    13  14  15             16                     17  18  19       20      21
+    conf_3d = "multigraphconv_9_16_0,b_0,r_0,pnv_max_0.05_0,multigraphconv_9_16_0,b_0,r_0,pnv_max_0.08_0,multigraphconv_9_32_0,b_0,r_0,pnv_max_0.12_0,multigraphconv_9_64_0,b_0,r_0,pnv_max_0.24_0,multigraphconv_9_128_0,b_0,r_0,gp_avg_0,d_0.2_0,f_19_cp_0"
     model = GraphNetwork(config=conf_3d, nfeat=3, multigpu=True)
 
     optimizer = torch.optim.RAdam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=0.0001)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     model_name = os.path.basename(__file__).rstrip(".py")
-    
+
     run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=100)
 
     last_checkpoint = f"data/checkpoints/geometric_train_best_model.pt"
     model, optimizer, start_epoch = load_ckp(last_checkpoint, model, optimizer, scheduler)
-    extract_features(train_loader, 'train')
-    extract_features(test_loader, 'test')
+    extract_features(train_loader, "train")
+    extract_features(test_loader, "test")

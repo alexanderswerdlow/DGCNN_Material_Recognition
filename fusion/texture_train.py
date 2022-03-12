@@ -10,7 +10,6 @@ import torchvision.transforms as transforms
 from geomat import GeoMat
 from tqdm import tqdm
 import timm
-from fusion.radam import RAdam
 from timm.loss import LabelSmoothingCrossEntropy
 
 pre_transform = T.NormalizeScale()
@@ -77,7 +76,7 @@ def extract_features(loader, loader_name):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = timm.create_model("convnext_base", pretrained=True, num_classes=19, drop_path_rate=0.8).cuda()
-    optimizer = RAdam(model.parameters(), lr=0.00005)
+    optimizer = torch.optim.RAdam(model.parameters(), lr=0.00005)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
     model_name = os.path.basename(__file__).rstrip(".py") + "_base"

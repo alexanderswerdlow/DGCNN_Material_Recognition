@@ -112,7 +112,7 @@ class GeoMat(Dataset):
             if "rotate" in self.transforms3d:
                 M = augmentations.vertical_rot(M)
             if "mirror" in self.transforms3d:
-                r = random.random()
+                r = self.transforms3d["mirror"]
                 M = augmentations.mirror(r, M)
             data.point_cloud_3d = data.point_cloud_3d @ M.T
             data.point_cloud_3d -= np.min(data.point_cloud_3d, axis=0)

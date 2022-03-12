@@ -44,7 +44,7 @@ def random_crop_3D(P, F, factor):
     npoints_inside_sphere = 0
 
     x = torch.from_numpy(P)
-    y = torch.from_numpy(centroid).unsqueeze(0)
+    y = torch.from_numpy(centroid).unsqueeze(0).double()
     while npoints_inside_sphere < n_points_after_crop:
         _, crop = torch_cluster.radius(x, y, rad, max_num_neighbors=n_points_after_crop)
 

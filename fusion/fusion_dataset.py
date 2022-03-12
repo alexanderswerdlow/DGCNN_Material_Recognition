@@ -54,7 +54,6 @@ class FusionDataset(torch.utils.data.Dataset):
         P_b1 -= np.min(P_b1, axis=0)
         P_b2 -= np.min(P_b2, axis=0)
 
-        # print(F_b1.shape, P_b1.shape, cls_b1, F_b2.shape, P_b2.shape, cls_b2)
         data_1 = Data(x=torch.tensor(F_b1), pos=torch.tensor(P_b1), y=cls_b1)
         data_2 = Data(x=torch.tensor(F_b2), pos=torch.tensor(P_b2), y=cls_b2)
 

@@ -6,7 +6,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
 import sklearn.metrics as metrics
 import os.path
-from util import criterion, run_training, get_dataset_dir, get_data_dir
+from util import criterion, run_training, get_dataset_dir, get_data_dir, load_ckp, save_h5_features, SaveFeatures
 from fusion.networks import GraphNetwork
 import torchvision.transforms as transforms
 import h5py
@@ -25,12 +25,12 @@ transforms3d = {}
 
 # need to fix transforms (flip, crop, dropout)
 
-train_dataset = GeoMat(get_dataset_dir(), True, None, pre_transform, transforms3d=transforms3d)
-test_dataset = GeoMat(get_dataset_dir(), False, None, pre_transform)
+train_dataset = GeoMat(get_dataset_dir(), True, None, pre_transform, transforms3d=transforms3d, geometric_train=True)
+test_dataset = GeoMat(get_dataset_dir(), False, None, pre_transform, geometric_train=True)
 
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=6)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=6)
+train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=6)
+test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=6)
 
 
 def train():
@@ -39,14 +39,8 @@ def train():
     train_loss, train_pred, train_true = 0, [], []
     for data in tqdm(train_loader):
         optimizer.zero_grad()
-
-        feat = torch.stack([x_ for x_ in data.hha])
-        points = torch.stack([x_ for x_ in data.point_cloud_3d])
-        data.pos = points
-        data.x = feat
-
         out = model(data)
-        loss = criterion(out.to(device), data.y.to(device))
+        loss = criterion(out, data.y.to(device))
         loss.backward()
         optimizer.step()
         preds = out.max(dim=1)[1]
@@ -64,32 +58,9 @@ def test():
     correct = 0
     for data in test_loader:
         with torch.no_grad():
-            feat = torch.stack([x_ for x_ in data.hha])
-            points = torch.stack([x_ for x_ in data.point_cloud_3d])
-
-            data.pos = points
-            data.x = feat
-
             pred = model(data).max(dim=1)[1]
         correct += pred.eq(data.y.to(device)).sum().item()
     return correct / len(test_loader.dataset)
-
-
-class SaveFeatures:
-    def __init__(self, module):
-        self.hook = module.register_forward_hook(self.hook_fn)
-
-    def hook_fn(self, module, input, output):
-        self.features = output
-
-    def close(self):
-        self.hook.remove()
-
-
-def save_h5_features(fname_h5_feat3d, data_key, data_value):
-    h5_feat = h5py.File(fname_h5_feat3d.strip(), "a")
-    h5_feat.create_dataset(data_key, data=data_value, compression="gzip", compression_opts=4, dtype="float")
-    h5_feat.close()
 
 
 @torch.no_grad()
@@ -100,12 +71,6 @@ def extract_features(loader, loader_name, nlayer=16):
     features = SaveFeatures(list(model.children())[nlayer])
 
     for _, data in enumerate(loader):
-        feat = torch.stack([x_ for x_ in data.hha]).to(device)
-        points = torch.stack([x_ for x_ in data.point_cloud_3d]).to(device)
-
-        data.pos = points
-        data.x = feat
-
         graph = model(data)
         feat = features.features
 
@@ -136,7 +101,10 @@ if __name__ == "__main__":
     optimizer = torch.optim.RAdam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=0.0001)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     model_name = os.path.basename(__file__).rstrip(".py")
-    run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=3)
-    print("done")
+    
+    run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=100)
+
+    last_checkpoint = f"data/checkpoints/geometric_train_best_model.pt"
+    model, optimizer, start_epoch = load_ckp(last_checkpoint, model, optimizer, scheduler)
     extract_features(train_loader, 'train')
     extract_features(test_loader, 'test')

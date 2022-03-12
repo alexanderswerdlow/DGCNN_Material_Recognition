@@ -1,5 +1,5 @@
 """
-    2D–3D Geometric Fusion network using Multi-Neighbourhood Graph Convolution for RGB-D indoor scene classification
+    2D-3D Geometric Fusion network using Multi-Neighbourhood Graph Convolution for RGB-D indoor scene classification
     2021 Albert Mosella-Montoro <albert.mosella@upc.edu>
 """
 
@@ -526,7 +526,7 @@ class MultiModalGroupFusion(torch.nn.Module):
         start = pos.min(dim=0)[0] - self.pool_rad * 0.5
         end = pos.max(dim=0)[0] + self.pool_rad * 0.5
 
-        cluster = torch_geometric.nn.voxel_grid(pos, batch, self.pool_rad, start=start, end=end)
+        cluster = torch_geometric.nn.voxel_grid(pos, self.pool_rad, batch, start=start, end=end)
         cluster, perm = consecutive_cluster(cluster)
 
         superpoint = scatter(pos, cluster, dim=0, reduce='mean')

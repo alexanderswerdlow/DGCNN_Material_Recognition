@@ -36,7 +36,7 @@ def create_point_cloud_depth(img, depth, fx, fy, cx, cy):
 
 
 class GeoMat(Dataset):
-    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None, feature_extraction=False, transforms3d={}):
+    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None, feature_extraction=False, transforms3d={}, img_model=None, geometric_train=False):
 
         self.train_raw = self.read_txt(osp.join(root, "raw_train.txt"))
         self.test_raw = self.read_txt(osp.join(root, "raw_test.txt"))
@@ -49,6 +49,7 @@ class GeoMat(Dataset):
 
         self.feature_extraction = feature_extraction
         self.transforms3d = transforms3d
+        self.geometric_train = geometric_train
 
         if self.feature_extraction:
             self.rgb_shape = np.empty((100, 100)).shape
@@ -63,9 +64,7 @@ class GeoMat(Dataset):
             elif self.feature_extraction == 'v3':
                 self.img_model = timm.create_model('convnext_base', pretrained=True).cuda()
             elif self.feature_extraction == 'v4':
-                self.img_model = timm.create_model("convnext_large", pretrained=True, num_classes=19, drop_path_rate=0.8).cuda()
-                checkpoint = torch.load(f'{get_data_dir()}/checkpoints/texture_train_large_best_model.pt')
-                self.img_model.load_state_dict(checkpoint["state_dict"])
+                self.img_model = img_model
             else:
                 raise Exception('Invalid Feature Extraction Value')
             
@@ -116,9 +115,20 @@ class GeoMat(Dataset):
                 r = random.random()
                 M = augmentations.mirror(r, M)
             data.point_cloud_3d = data.point_cloud_3d @ M.T
-        data.point_cloud_3d -= np.min(data.point_cloud_3d, axis=0)
+            data.point_cloud_3d -= np.min(data.point_cloud_3d, axis=0)
+
         data.hha = torch.Tensor(data.hha)
         data.point_cloud_3d = torch.Tensor(data.point_cloud_3d)
+
+        if self.geometric_train:
+            data.pos = torch.stack([x_ for x_ in data.point_cloud_3d])
+            data.x = torch.stack([x_ for x_ in data.hha])
+            
+            # Not sure if these are required, trying to save GPU memory
+            del data.image
+            del data.img_point_cloud
+            del data.point_cloud_3d
+            del data.hha
         
         return data
 

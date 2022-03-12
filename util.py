@@ -5,12 +5,33 @@ import shutil
 from torch.utils.tensorboard import SummaryWriter
 import os
 import os.path as osp
+import h5py
 
 def get_data_dir():
     return osp.join(osp.dirname(osp.realpath(__file__)), "data")
 
 def get_dataset_dir():
     return osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
+
+class SaveFeatures:
+    def __init__(self, module):
+        self.hook = module.register_forward_hook(self.hook_fn)
+
+    def hook_fn(self, module, input, output):
+        self.features = output
+
+    def close(self):
+        self.hook.remove()
+
+
+def save_h5_features(fname_h5_feat2d, data_key, data_value):
+    h5_file = h5py.File(fname_h5_feat2d.strip(), "a")
+    try:
+        del h5_file[data_key]
+    except:
+        pass
+    h5_file.create_dataset(data_key, data=data_value, compression="gzip", compression_opts=4, dtype="float")
+    h5_file.close()
 
 
 def save_ckp(state, is_best, checkpoint_dir, model_name):
@@ -26,7 +47,6 @@ def load_ckp(checkpoint_fpath, model, optimizer, scheduler):
     optimizer.load_state_dict(checkpoint["optimizer"])
     scheduler.load_state_dict(checkpoint["scheduler"])
     return model, optimizer, checkpoint["epoch"]
-
 
 def criterion(pred, gold, smoothing=True):
     """Calculate cross entropy loss, apply label smoothing if needed."""
@@ -53,13 +73,19 @@ def get_writer(model_name):
 
 
 def run_training(model_name, train, test, model, optimizer, scheduler, total_epochs):
+    best_checkpoint = f"data/checkpoints/{model_name}_best_model.pt"
+    if os.path.isfile(best_checkpoint):
+        best_test_acc = torch.load(best_checkpoint)["test_acc"]
+    else:
+        best_test_acc = 0
+
     last_checkpoint = f"data/checkpoints/{model_name}_checkpoint.pt"
     if os.path.isfile(last_checkpoint):
         model, optimizer, start_epoch = load_ckp(last_checkpoint, model, optimizer, scheduler)
     else:
         start_epoch = 1
     writer = get_writer(model_name)
-    best_test_acc = 0
+    
     print(f"Starting at epoch {start_epoch}")
     for epoch in range(start_epoch, total_epochs):
         loss, train_acc, balanced_train_acc = train()
@@ -72,9 +98,11 @@ def run_training(model_name, train, test, model, optimizer, scheduler, total_epo
         writer.add_scalar("Balanced_Accuracy/train", balanced_train_acc, epoch)
         writer.add_scalar("Accuracy/test", test_acc, epoch)
 
-        checkpoint = {"epoch": epoch + 1, "state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict()}
+        checkpoint = {"epoch": epoch + 1, "state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(), "test_acc": test_acc}
         save_ckp(checkpoint, test_acc >= best_test_acc, "data/checkpoints", model_name)
 
         best_test_acc = max(test_acc, best_test_acc)
+
+    print(f"Finished training at epoch {total_epochs - 1}")
 
     writer.close()

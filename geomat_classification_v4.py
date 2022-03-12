@@ -8,18 +8,23 @@ from geomat import GeoMat
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import MLP, DynamicEdgeConv, global_max_pool
 import sklearn.metrics as metrics
-from util import criterion, run_training
+from util import criterion, run_training, get_data_dir
 import os.path
 from tqdm import tqdm
 from fusion.radam import RAdam
+import timm
+
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)
-train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v4')
-test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v4')
-train_loader = DataLoader(train_dataset, batch_size=6, shuffle=True, num_workers=0)
-test_loader = DataLoader(test_dataset, batch_size=6, shuffle=False, num_workers=0)
-
+img_model = timm.create_model("convnext_base", num_classes=19, drop_path_rate=0.8).cuda()
+checkpoint = torch.load(f'{get_data_dir()}/checkpoints/texture_train_base_best_model.pt')
+img_model.load_state_dict(checkpoint["state_dict"])
+del checkpoint
+train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v4', img_model=img_model)
+test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v4', img_model=img_model)
+train_loader = DataLoader(train_dataset, batch_size=9, shuffle=True, num_workers=0)
+test_loader = DataLoader(test_dataset, batch_size=9, shuffle=False, num_workers=0)
 
 class Net(torch.nn.Module):
     def __init__(self, in_channels, out_channels, k=20, aggr="max", feat_size=1920):
@@ -35,6 +40,7 @@ class Net(torch.nn.Module):
     def forward(self, data):
         # Feature Extraction must be in geomat.py so that torch_geometric can properly sample points
         pos, x, batch, features = data.pos, data.x, data.batch, data.features
+        pos, x, batch, features = pos.cuda(), x.cuda(), batch.cuda(), features.cuda()
         features = self.filter_conv(torch.unsqueeze(torch.unsqueeze(features, dim=-1), dim=-1)).squeeze()
         x1 = self.conv1(torch.cat((pos, x, features), dim=1).float(), batch)
         x2 = self.conv2(x1, batch)
@@ -45,16 +51,14 @@ class Net(torch.nn.Module):
         out = self.fc2(out)
         return F.log_softmax(out, dim=1)
 
-
 def train():
     model.train()
 
     train_loss, train_pred, train_true = 0, [], []
     for data in tqdm(train_loader):
-        data = data.to(device)
         optimizer.zero_grad()
         out = model(data)
-        loss = criterion(out, data.y)
+        loss = criterion(out, data.y.cuda())
         loss.backward()
         optimizer.step()
         preds = out.max(dim=1)[1]
@@ -72,7 +76,6 @@ def test():
 
     correct = 0
     for data in test_loader:
-        data = data.to(device)
         with torch.no_grad():
             pred = model(data).max(dim=1)[1]
         correct += pred.eq(data.y).sum().item()

@@ -11,8 +11,8 @@ import torch_cluster
 
 def vertical_rot(M):
     angle = random.uniform(0, 2*math.pi)
-    Mnew = np.dot(transforms3d.axangles.axangle2mat([0, 1, 0], angle), M)
-    return Mnew
+    M = np.dot(transforms3d.axangles.axangle2mat([0, 1, 0], angle), M)
+    return M
 
 def dropout(P, F, p):
     idx = random.sample(range(P.shape[0]), int(math.ceil((1-p)*P.shape[0])))
@@ -20,10 +20,10 @@ def dropout(P, F, p):
 
 def mirror(r, M):
     if random.random() < r/2:
-        Mnew = np.dot(transforms3d.zooms.zfdir2mat(-1, [1, 0, 0]), M)
+        M = np.dot(transforms3d.zooms.zfdir2mat(-1, [1, 0, 0]), M)
     if random.random() < r/2:
-        Mnew = np.dot(transforms3d.zooms.zfdir2mat(-1, [0, 0, 1]), Mnew)
-    return Mnew
+        M = np.dot(transforms3d.zooms.zfdir2mat(-1, [0, 0, 1]), M)
+    return M
 
 def random_crop_3D(P, F, factor):
     npoints = P.shape[0]
@@ -44,7 +44,7 @@ def random_crop_3D(P, F, factor):
     npoints_inside_sphere = 0
 
     x = torch.from_numpy(P)
-    y = torch.from_numpy(centroid).unsqueeze(0)
+    y = torch.from_numpy(centroid).unsqueeze(0).double()
     while npoints_inside_sphere < n_points_after_crop:
         _, crop = torch_cluster.radius(x, y, rad, max_num_neighbors=n_points_after_crop)
 

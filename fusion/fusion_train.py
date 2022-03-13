@@ -19,11 +19,10 @@ test_dataset = FusionDataset("test", f"{get_data_dir()}/fusion/3d", f"{get_data_
 
 train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=6, collate_fn=custom_collate)
 test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=6, collate_fn=custom_collate)
-label_names = ['Asphalt','Brick','Cement_Granular','Cement_Smooth','Concrete_Cast_in_Place','Concrete_Precast','Foliage','Grass','Gravel','Marble','Metal_Grills','Paving','pre_filter.pt','pre_transform.pt','Soil_Compact','Soil_Dirt_and_Vegetation','Soil_Loose','Soil_Mulch','Stone_Granular','Stone_Limestone','Wood']
 
 def train():
     model.train()
-    cm = ConfusionMatrixMeter(label_names, cmap='Oranges')
+    cm = ConfusionMatrixMeter(cmap='Oranges')
     train_loss, train_pred, train_true = 0, [], []
     for data in tqdm(train_loader):
         batch_1, batch_2 = data
@@ -47,7 +46,7 @@ def train():
 
 def test():
     model.eval()
-    cm = ConfusionMatrixMeter(label_names, cmap='Blues')
+    cm = ConfusionMatrixMeter(cmap='Blues')
     correct = 0
     for data in test_loader:
         batch_1, batch_2 = data

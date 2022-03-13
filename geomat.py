@@ -63,7 +63,7 @@ class GeoMat(Dataset):
                 self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
             elif self.feature_extraction == 'v3':
                 self.img_model = timm.create_model('convnext_base', pretrained=True).cuda()
-            elif self.feature_extraction == 'v4':
+            elif self.feature_extraction == 'v4' or self.feature_extraction == 'v5':
                 self.img_model = img_model
             else:
                 raise Exception('Invalid Feature Extraction Value')
@@ -91,14 +91,19 @@ class GeoMat(Dataset):
         fn = self.data[idx]
         data = torch.load(osp.join(self.processed_dir, fn), map_location="cpu")
         if self.feature_extraction:
-            _, _, _, img = data.pos, data.x, data.batch, data.image
             with torch.no_grad():
+                _, _, _, img = data.pos, data.x, data.batch, data.image
+                
                 img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
-            if self.feature_extraction == 'v2':
-                unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
-            elif self.feature_extraction == 'v3' or self.feature_extraction == 'v4':
-                unpooled_features = self.img_model.get_features_concat(img_batch.unsqueeze(0))
-            data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
+                if self.feature_extraction == 'v2':
+                    unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
+                elif self.feature_extraction == 'v3' or self.feature_extraction == 'v4':
+                    unpooled_features = self.img_model.get_features_concat(img_batch.unsqueeze(0))
+                elif self.feature_extraction == 'v5':
+                    unpooled_features = self.img_model.get_features_concat_pool_only(img_batch.unsqueeze(0))
+
+                data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
+
         if self.transforms3d.items():
             M = np.eye(3)
             if "crop"  in self.transforms3d:
@@ -119,6 +124,7 @@ class GeoMat(Dataset):
 
         data.hha = torch.Tensor(data.hha)
         data.point_cloud_3d = torch.Tensor(data.point_cloud_3d)
+        
 
         if self.geometric_train:
             data.pos = torch.stack([x_ for x_ in data.point_cloud_3d])
@@ -129,6 +135,7 @@ class GeoMat(Dataset):
             del data.img_point_cloud
             del data.point_cloud_3d
             del data.hha
+            torch.cuda.empty_cache()
         
         return data
 

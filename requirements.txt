@@ -13,6 +13,7 @@ tensorboard
 timm
 transforms3d
 class-resolver
+torch-encoding
 
 -f https://download.pytorch.org/whl/cu113/torch_stable.html
 torch==1.10.2+cu113

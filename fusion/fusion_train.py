@@ -14,15 +14,24 @@ from fusion.fusion_dataset import FusionDataset, custom_collate
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 
-train_dataset = FusionDataset("train", f"{get_data_dir()}/fusion/3d", f"{get_data_dir()}/fusion/2d")
-test_dataset = FusionDataset("test", f"{get_data_dir()}/fusion/3d", f"{get_data_dir()}/fusion/2d")
+train_dataset = FusionDataset(
+    "train", f"{get_data_dir()}/fusion/3d", f"{get_data_dir()}/fusion/2d"
+)
+test_dataset = FusionDataset(
+    "test", f"{get_data_dir()}/fusion/3d", f"{get_data_dir()}/fusion/2d"
+)
 
-train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=6, collate_fn=custom_collate)
-test_loader = DataLoader(test_dataset, batch_size=24, shuffle=False, num_workers=6, collate_fn=custom_collate)
+train_loader = DataLoader(
+    train_dataset, batch_size=24, shuffle=True, num_workers=6, collate_fn=custom_collate
+)
+test_loader = DataLoader(
+    test_dataset, batch_size=24, shuffle=False, num_workers=6, collate_fn=custom_collate
+)
+
 
 def train():
     model.train()
-    cm = ConfusionMatrixMeter(cmap='Oranges')
+    cm = ConfusionMatrixMeter(cmap="Oranges")
     train_loss, train_pred, train_true = 0, [], []
     for data in tqdm(train_loader):
         batch_1, batch_2 = data
@@ -41,12 +50,17 @@ def train():
 
     train_true = np.concatenate(train_true)
     train_pred = np.concatenate(train_pred)
-    return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred), cm
+    return (
+        train_loss / len(train_dataset),
+        metrics.accuracy_score(train_true, train_pred),
+        metrics.balanced_accuracy_score(train_true, train_pred),
+        cm,
+    )
 
 
 def test():
     model.eval()
-    cm = ConfusionMatrixMeter(cmap='Blues')
+    cm = ConfusionMatrixMeter(cmap="Blues")
     correct = 0
     for data in test_loader:
         batch_1, batch_2 = data
@@ -59,10 +73,21 @@ def test():
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = TwoStreamNetwork(
-    "b,r,gp_avg,d_0.5,f_19_cp_1", features_b1=128, features_b2=1344, rad_fuse_pool=0.24, features_proj_b1=512, features_proj_b2=512, proj_b1=True, proj_b2=True
+    "b,r,gp_avg,d_0.5,f_19_cp_1",
+    features_b1=128,
+    features_b2=1344,
+    rad_fuse_pool=0.24,
+    features_proj_b1=512,
+    features_proj_b2=512,
+    proj_b1=True,
+    proj_b2=True,
 ).to(device)
-optimizer = torch.optim.RAdam(model.parameters(), betas=(0.9, 0.999), lr=0.001, weight_decay=0.0001)
+optimizer = torch.optim.RAdam(
+    model.parameters(), betas=(0.9, 0.999), lr=0.001, weight_decay=0.0001
+)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 model_name = os.path.basename(__file__).rstrip(".py")
 
-run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True)
+run_training(
+    model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True
+)

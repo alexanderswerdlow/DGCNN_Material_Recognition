@@ -8,14 +8,16 @@ from geomat import GeoMat
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import MLP, DynamicEdgeConv, global_max_pool
 import sklearn.metrics as metrics
-from util import criterion, run_training
+from util import criterion, run_training, get_data_dir
 import os.path
 from tqdm import tqdm
 
-path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
-pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
-train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v2')
-test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v2')
+path = f"{get_data_dir()}/geomat"
+pre_transform, transform = T.NormalizeScale(), T.FixedPoints(
+    1024
+)  # T.SamplePoints(1024)
+train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction="v2")
+test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction="v2")
 train_loader = DataLoader(train_dataset, batch_size=9, shuffle=True, num_workers=0)
 test_loader = DataLoader(test_dataset, batch_size=9, shuffle=False, num_workers=0)
 
@@ -23,11 +25,52 @@ test_loader = DataLoader(test_dataset, batch_size=9, shuffle=False, num_workers=
 class Net(torch.nn.Module):
     def __init__(self, in_channels, out_channels, k=20, aggr="max"):
         super().__init__()
-        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 136), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
-        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
-        self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
-        self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
-        self.fc1 = MLP([64 + 64 + 128 + 256, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5)
+        self.conv1 = DynamicEdgeConv(
+            MLP(
+                [2 * (3 + 3 + 136), 64],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.5,
+            ),
+            k,
+            aggr,
+        )
+        self.conv2 = DynamicEdgeConv(
+            MLP(
+                [2 * 64, 64],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.5,
+            ),
+            k,
+            aggr,
+        )
+        self.conv3 = DynamicEdgeConv(
+            MLP(
+                [2 * 64, 128],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.5,
+            ),
+            k,
+            aggr,
+        )
+        self.conv4 = DynamicEdgeConv(
+            MLP(
+                [2 * 128, 256],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.5,
+            ),
+            k,
+            aggr,
+        )
+        self.fc1 = MLP(
+            [64 + 64 + 128 + 256, 1024],
+            act="LeakyReLU",
+            act_kwargs={"negative_slope": 0.2},
+            dropout=0.5,
+        )
         self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.5)
 
     def forward(self, data):
@@ -61,7 +104,11 @@ def train():
 
     train_true = np.concatenate(train_true)
     train_pred = np.concatenate(train_pred)
-    return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred)
+    return (
+        train_loss / len(train_dataset),
+        metrics.accuracy_score(train_true, train_pred),
+        metrics.balanced_accuracy_score(train_true, train_pred),
+    )
 
 
 def test():

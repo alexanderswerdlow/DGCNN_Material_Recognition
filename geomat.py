@@ -36,7 +36,18 @@ def create_point_cloud_depth(img, depth, fx, fy, cx, cy):
 
 
 class GeoMat(Dataset):
-    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None, feature_extraction=False, transforms3d={}, img_model=None, geometric_train=False):
+    def __init__(
+        self,
+        root,
+        train=True,
+        transform=None,
+        pre_transform=None,
+        pre_filter=None,
+        feature_extraction=False,
+        transforms3d={},
+        img_model=None,
+        geometric_train=False,
+    ):
 
         self.train_raw = self.read_txt(osp.join(root, "raw_train.txt"))
         self.test_raw = self.read_txt(osp.join(root, "raw_test.txt"))
@@ -59,15 +70,23 @@ class GeoMat(Dataset):
                     self.boxes[i][j][1:] = np.array([i, j, i + 1, j + 1])
 
             self.boxes = torch.from_numpy(self.boxes.reshape(-1, 5)).float().cuda()
-            if self.feature_extraction == 'v2':
-                self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
-            elif self.feature_extraction == 'v3':
-                self.img_model = timm.create_model('convnext_base', pretrained=True).cuda()
-            elif self.feature_extraction == 'v4' or self.feature_extraction == 'v5' or self.feature_extraction == 'v6':
+            if self.feature_extraction == "v2":
+                self.img_model = timm.create_model(
+                    "efficientnet_b3a", features_only=True, pretrained=True
+                ).cuda()
+            elif self.feature_extraction == "v3":
+                self.img_model = timm.create_model(
+                    "convnext_base", pretrained=True
+                ).cuda()
+            elif (
+                self.feature_extraction == "v4"
+                or self.feature_extraction == "v5"
+                or self.feature_extraction == "v6"
+            ):
                 self.img_model = img_model
             else:
-                raise Exception('Invalid Feature Extraction Value')
-            
+                raise Exception("Invalid Feature Extraction Value")
+
             self.img_model.eval()
             self.img_config = resolve_data_config({}, model=self.img_model)
             self.img_transform = create_transform(**self.img_config)
@@ -93,27 +112,37 @@ class GeoMat(Dataset):
         if self.feature_extraction:
             with torch.no_grad():
                 _, _, _, img = data.pos, data.x, data.batch, data.image
-                
-                img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
-                if self.feature_extraction == 'v2':
-                    unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
-                elif self.feature_extraction == 'v3' or self.feature_extraction == 'v4':
-                    unpooled_features = self.img_model.get_features_concat(img_batch.unsqueeze(0))
-                elif self.feature_extraction == 'v5' or self.feature_extraction == 'v6':
-                    unpooled_features = self.img_model.get_features_concat_pool_only(img_batch.unsqueeze(0))
 
-                data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()
+                img_batch = self.img_transform(Image.fromarray(img.numpy())).cuda()
+                if self.feature_extraction == "v2":
+                    unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
+                elif self.feature_extraction == "v3" or self.feature_extraction == "v4":
+                    unpooled_features = self.img_model.get_features_concat(
+                        img_batch.unsqueeze(0)
+                    )
+                elif self.feature_extraction == "v5" or self.feature_extraction == "v6":
+                    unpooled_features = self.img_model.get_features_concat_pool_only(
+                        img_batch.unsqueeze(0)
+                    )
+
+                data.features = torchvision.ops.ps_roi_align(
+                    unpooled_features, self.boxes, 1
+                ).squeeze()
 
         if self.transforms3d.items():
             M = np.eye(3)
-            if "crop"  in self.transforms3d:
+            if "crop" in self.transforms3d:
                 factor = self.transforms3d["crop"]
                 if factor <= 0:
-                    factor = np.random.randint(low=87.5, high=100, dtype=np.int32)/100
-                data.point_cloud_3d, data.hha =  augmentations.random_crop_3D(data.point_cloud_3d, data.hha, factor)
+                    factor = np.random.randint(low=87.5, high=100, dtype=np.int32) / 100
+                data.point_cloud_3d, data.hha = augmentations.random_crop_3D(
+                    data.point_cloud_3d, data.hha, factor
+                )
             if "dropout" in self.transforms3d:
                 p = self.transforms3d["dropout"]
-                data.point_cloud_3d, data.hha =  augmentations.dropout(data.point_cloud_3d, data.hha, p)
+                data.point_cloud_3d, data.hha = augmentations.dropout(
+                    data.point_cloud_3d, data.hha, p
+                )
             if "rotate" in self.transforms3d:
                 M = augmentations.vertical_rot(M)
             if "mirror" in self.transforms3d:
@@ -124,19 +153,18 @@ class GeoMat(Dataset):
 
         data.hha = torch.Tensor(data.hha)
         data.point_cloud_3d = torch.Tensor(data.point_cloud_3d)
-        
 
         if self.geometric_train:
             data.pos = torch.stack([x_ for x_ in data.point_cloud_3d])
             data.x = torch.stack([x_ for x_ in data.hha])
-            
+
             # Not sure if these are required, trying to save GPU memory
             del data.image
             del data.img_point_cloud
             del data.point_cloud_3d
             del data.hha
             torch.cuda.empty_cache()
-        
+
         return data
 
     def process(self):
@@ -144,23 +172,40 @@ class GeoMat(Dataset):
         raw_filenames = self.raw_paths
         processed_filenames = self.processed_paths
 
-        for dataset_idx, (raw_fn, proc_fn) in enumerate(zip(raw_filenames, processed_filenames)):
+        for dataset_idx, (raw_fn, proc_fn) in enumerate(
+            zip(raw_filenames, processed_filenames)
+        ):
             f = sio.loadmat(raw_fn)
 
-            label = torch.from_numpy(f["Class"][0]).to(torch.long) - 1  # Labeled 1-19 but pytorch functions expect zero-indexing so convert to 0-18
+            label = (
+                torch.from_numpy(f["Class"][0]).to(torch.long) - 1
+            )  # Labeled 1-19 but pytorch functions expect zero-indexing so convert to 0-18
             depth = np.ascontiguousarray(f["Depth"].astype(np.float32))  # 100x100
             rgb = np.ascontiguousarray(f["Image"])  # 100x100x3
             intrinsics = f["Intrinsics"].astype(np.float64)  # 3x3
-            extrinsics = np.vstack([f["Extrinsics"].astype(np.float64), [0, 0, 0, 1]])  # 3x4
+            extrinsics = np.vstack(
+                [f["Extrinsics"].astype(np.float64), [0, 0, 0, 1]]
+            )  # 3x4
 
-            depth_, img_ = create_point_cloud_depth(rgb, -depth, intrinsics[0, 0], intrinsics[1, 1], intrinsics[0, 2], intrinsics[1, 2])
-            data = MyData(pos=torch.from_numpy(depth_.reshape(-1, 3)), x=torch.from_numpy(img_), y=label)
+            depth_, img_ = create_point_cloud_depth(
+                rgb,
+                -depth,
+                intrinsics[0, 0],
+                intrinsics[1, 1],
+                intrinsics[0, 2],
+                intrinsics[1, 2],
+            )
+            data = MyData(
+                pos=torch.from_numpy(depth_.reshape(-1, 3)),
+                x=torch.from_numpy(img_),
+                y=label,
+            )
             data.image = torch.from_numpy(rgb)
             data.dataset_idx = dataset_idx
             data.img_point_cloud = depth_
 
-            data.point_cloud_3d = depth_.reshape(-1,3)
-            hha_depth = getHHA(intrinsics, -depth, -depth).reshape(-1,3)
+            data.point_cloud_3d = depth_.reshape(-1, 3)
+            hha_depth = getHHA(intrinsics, -depth, -depth).reshape(-1, 3)
             data.hha = hha_depth
 
             if self.pre_filter is not None and not self.pre_filter(data):

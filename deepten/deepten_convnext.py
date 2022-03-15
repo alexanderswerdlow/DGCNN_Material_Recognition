@@ -15,8 +15,12 @@ from encoding.nn import Encoding, View, Normalize
 import timm
 import fusion.convnext
 
-img_model = timm.create_model("convnext_large", num_classes=19, drop_path_rate=0.8).cuda()
-checkpoint = torch.load(f"{get_data_dir()}/checkpoints/texture_train_large_best_model.pt")
+img_model = timm.create_model(
+    "convnext_large", num_classes=19, drop_path_rate=0.8
+).cuda()
+checkpoint = torch.load(
+    f"{get_data_dir()}/checkpoints/texture_train_large_best_model.pt"
+)
 img_model.load_state_dict(checkpoint["state_dict"])
 del checkpoint
 
@@ -68,7 +72,12 @@ def train():
 
     train_true = np.concatenate(train_true)
     train_pred = np.concatenate(train_pred)
-    return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred), cm
+    return (
+        train_loss / len(train_dataset),
+        metrics.accuracy_score(train_true, train_pred),
+        metrics.balanced_accuracy_score(train_true, train_pred),
+        cm,
+    )
 
 
 def test():
@@ -90,4 +99,6 @@ optimizer = torch.optim.RAdam(model.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 model_name = os.path.basename(__file__).rstrip(".py")
 
-run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True)
+run_training(
+    model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True
+)

@@ -14,25 +14,34 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_scatter import scatter
 from torch_cluster import nearest
 
+
 class GraphNetwork(torch.nn.Module):
-    def __init__(self, config, nfeat, multigpu=False, default_fnet_widths=[128],
-                 default_fnet_llbias=False, default_fnet_tanh=False,
-                 default_edge_attr='poscart', default_conv_bias=False):
+    def __init__(
+        self,
+        config,
+        nfeat,
+        multigpu=False,
+        default_fnet_widths=[128],
+        default_fnet_llbias=False,
+        default_fnet_tanh=False,
+        default_edge_attr="poscart",
+        default_conv_bias=False,
+    ):
         super(GraphNetwork, self).__init__()
 
         self.multigpu = multigpu
         self.devices = []
-        self.flow = 'source_to_target'
+        self.flow = "source_to_target"
         nfeat = nfeat
         nEdgeAttr = 0
         self.intermediate = None
 
-        for d, conf in enumerate(config.split(',')):
+        for d, conf in enumerate(config.split(",")):
             fnet_widths = default_fnet_widths
-            conf = conf.strip().split('_')
+            conf = conf.strip().split("_")
             device = None
             if default_edge_attr is not None:
-                edge_attr = [attr.strip() for attr in default_edge_attr.split('-')]
+                edge_attr = [attr.strip() for attr in default_edge_attr.split("-")]
             else:
                 edge_attr = []
             fnet_tanh = default_fnet_tanh
@@ -40,234 +49,310 @@ class GraphNetwork(torch.nn.Module):
             fnet_llbias = default_fnet_llbias
 
             # Graph Generation
-            if conf[0] == 'ggknn':
+            if conf[0] == "ggknn":
                 if len(conf) < 2:
-                    raise RuntimeError("{} Graph Generation layer requires more arguments".format(d))
+                    raise RuntimeError(
+                        "{} Graph Generation layer requires more arguments".format(d)
+                    )
                 neigh = int(conf[1])
                 if len(conf) > 2:
                     if conf[2].isdigit():
                         device = conf[2]
                     else:
-                        edge_attr = [attr.strip() for attr in conf[2].split('-')]
+                        edge_attr = [attr.strip() for attr in conf[2].split("-")]
                         if len(conf) == 4:
                             device = conf[3]
                         elif len(conf) > 4:
-                            raise RuntimeError("Invalid parameters in {} ggknn layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} ggknn layer".format(d)
+                            )
 
-                module = ext.GraphReg(knn=True, n_neigh=neigh, edge_attr=edge_attr, self_loop=True, flow=self.flow)
+                module = ext.GraphReg(
+                    knn=True,
+                    n_neigh=neigh,
+                    edge_attr=edge_attr,
+                    self_loop=True,
+                    flow=self.flow,
+                )
                 nEdgeAttr = ext.numberEdgeAttr(edge_attr, nfeat)
 
-            elif conf[0] == 'ggrad':
+            elif conf[0] == "ggrad":
                 if len(conf) < 3:
-                    raise RuntimeError("{} Graph Generation layer requires more arguments".format(d))
+                    raise RuntimeError(
+                        "{} Graph Generation layer requires more arguments".format(d)
+                    )
                 rad = float(conf[1])
                 neigh = int(conf[2])
                 if len(conf) > 3:
                     if conf[3].isdigit():
                         device = conf[3]
                     else:
-                        edge_attr = [attr.strip() for attr in conf[3].split('-')]
+                        edge_attr = [attr.strip() for attr in conf[3].split("-")]
                         if len(conf) == 5:
                             device = conf[4]
                         elif len(conf) > 5:
-                            raise RuntimeError("Invalid parameters in {} ggrad layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} ggrad layer".format(d)
+                            )
 
-                module = ext.GraphReg(knn=False, n_neigh=neigh, rad_neigh=rad,
-                                      edge_attr=edge_attr, self_loop=True, flow=self.flow)
+                module = ext.GraphReg(
+                    knn=False,
+                    n_neigh=neigh,
+                    rad_neigh=rad,
+                    edge_attr=edge_attr,
+                    self_loop=True,
+                    flow=self.flow,
+                )
                 nEdgeAttr = ext.numberEdgeAttr(edge_attr, nfeat)
 
-            elif conf[0] == 'f':
+            elif conf[0] == "f":
                 if len(conf) < 2:
-                    raise RuntimeError("{} Fully connected layer requires as argument the output features".format(d))
+                    raise RuntimeError(
+                        "{} Fully connected layer requires as argument the output features".format(
+                            d
+                        )
+                    )
                 nfeato = int(conf[1])
                 module = torch.nn.Linear(nfeat, nfeato)
                 nfeat = nfeato
                 if len(conf) == 3:
                     if conf[2].isdigit():
                         device = conf[2]
-                    elif conf[2] == 'cp':
-                        torch.nn.init.constant_(module.bias, -np.log(nfeato-1))
+                    elif conf[2] == "cp":
+                        torch.nn.init.constant_(module.bias, -np.log(nfeato - 1))
                 if len(conf) == 4:
                     device = conf[3]
                 elif len(conf) > 4:
-                    raise RuntimeError("Invalid parameters in {} fully connected layer".format(d))
+                    raise RuntimeError(
+                        "Invalid parameters in {} fully connected layer".format(d)
+                    )
 
-            elif conf[0] == 'b':
-                module = torch.nn.BatchNorm1d(nfeat, affine=True, track_running_stats=True)
+            elif conf[0] == "b":
+                module = torch.nn.BatchNorm1d(
+                    nfeat, affine=True, track_running_stats=True
+                )
                 if len(conf) == 2:
                     device = conf[1]
                 elif len(conf) > 3:
-                    raise RuntimeError("Invalid parameters in {} batchnom layer".format(d))
+                    raise RuntimeError(
+                        "Invalid parameters in {} batchnom layer".format(d)
+                    )
 
-            elif conf[0] == 'r':
+            elif conf[0] == "r":
                 module = torch.nn.ReLU(True)
                 if len(conf) == 2:
                     device = conf[1]
                 elif len(conf) > 3:
                     raise RuntimeError("Invalid parameters in {} relu layer".format(d))
-            elif conf[0] == 'd':
+            elif conf[0] == "d":
                 if len(conf) < 2:
                     raise RuntimeError(
-                        "{} Dropout layer requires as argument the probabity to zeroed an element".format(d))
+                        "{} Dropout layer requires as argument the probabity to zeroed an element".format(
+                            d
+                        )
+                    )
                 prob = float(conf[1])
                 module = torch.nn.Dropout(prob, inplace=False)
                 if len(conf) == 3:
                     device = conf[2]
                 elif len(conf) > 3:
-                    raise RuntimeError("Invalid parameters in {} dropout layer".format(d))
+                    raise RuntimeError(
+                        "Invalid parameters in {} dropout layer".format(d)
+                    )
 
-            elif conf[0] == 'agc':
+            elif conf[0] == "agc":
                 if len(conf) < 2:
-                    raise RuntimeError("{} agc layer requires as argument the output features".format(d))
+                    raise RuntimeError(
+                        "{} agc layer requires as argument the output features".format(
+                            d
+                        )
+                    )
                 nfeato = int(conf[1])
                 if len(conf) > 2:
                     if conf[2].isdigit():
                         device = conf[2]
                     else:
-                        params = [param.strip() for param in conf[2].split('-')]
+                        params = [param.strip() for param in conf[2].split("-")]
                         for param in params:
-                            p = [p.strip() for p in param.split(':')]
+                            p = [p.strip() for p in param.split(":")]
                             param = p[0]
-                            if param == 'bias':
+                            if param == "bias":
                                 conv_bias = int(p[1])
-                            elif param == 'fwidths':
-                                fnet_widths = ast.literal_eval(p[1].replace('#', ','))
-                            elif param == 'ftanh':
+                            elif param == "fwidths":
+                                fnet_widths = ast.literal_eval(p[1].replace("#", ","))
+                            elif param == "ftanh":
                                 fnet_tanh = int(p[1])
 
                         if len(conf) == 4:
                             device = conf[3]
 
                         elif len(conf) > 4:
-                            raise RuntimeError("Invalid parameters in {} agc layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} agc layer".format(d)
+                            )
 
-                module = ext.create_agc(nfeat, nfeato, [nEdgeAttr] + fnet_widths,
-                                        fnet_llbias=fnet_llbias,
-                                        bias=conv_bias,
-                                        fnet_tanh=fnet_tanh,
-                                        flow=self.flow)
+                module = ext.create_agc(
+                    nfeat,
+                    nfeato,
+                    [nEdgeAttr] + fnet_widths,
+                    fnet_llbias=fnet_llbias,
+                    bias=conv_bias,
+                    fnet_tanh=fnet_tanh,
+                    flow=self.flow,
+                )
                 nfeat = nfeato
 
-            elif conf[0] == 'multigraphconvknnfeat':
+            elif conf[0] == "multigraphconvknnfeat":
                 if len(conf) < 3:
-                    raise RuntimeError("{} MUNEGC layer requires as argument the output features".format(d))
+                    raise RuntimeError(
+                        "{} MUNEGC layer requires as argument the output features".format(
+                            d
+                        )
+                    )
                 n_neigh = int(conf[1])
                 nfeato = int(conf[2])
                 if len(conf) > 3:
                     if conf[3].isdigit():
                         device = conf[3]
                     else:
-                        params = [param.strip() for param in conf[3].split('-')]
+                        params = [param.strip() for param in conf[3].split("-")]
                         for param in params:
-                            p = [p.strip() for p in param.split(':')]
+                            p = [p.strip() for p in param.split(":")]
                             param = p[0]
-                            if param == 'bias':
+                            if param == "bias":
                                 conv_bias = int(p[1])
-                            elif param == 'fwidths':
-                                fnet_widths = ast.literal_eval(p[1].replace('#', ','))
-                            elif param == 'ftanh':
+                            elif param == "fwidths":
+                                fnet_widths = ast.literal_eval(p[1].replace("#", ","))
+                            elif param == "ftanh":
                                 fnet_tanh = int(p[1])
 
                         if len(conf) == 5:
                             device = conf[4]
 
                         elif len(conf) > 5:
-                            raise RuntimeError("Invalid parameters in {} MUNEGC layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} MUNEGC layer".format(d)
+                            )
 
-                module = ext.MUNEGC(nfeat, nfeato,
-                                    neighs=n_neigh,
-                                    fnetw=fnet_widths,
-                                    edge_attr=['posspherical'],
-                                    edge_attr_feat=['featureoffsets'],
-                                    fnet_llbias=fnet_llbias,
-                                    fnet_tanh=fnet_tanh,
-                                    bias=conv_bias,
-                                    aggr='avg',
-                                    flow=self.flow)
-
-                nfeat = nfeato
-
-            # MultiGraphConvolution
-            elif conf[0] == 'multigraphconv':
-                if len(conf) < 3:
-                    raise RuntimeError("{} MUNEGC layer requires as argument the output features".format(d))
-                n_neigh = int(conf[1])
-                nfeato = int(conf[2])
-                if len(conf) > 3:
-                    if conf[3].isdigit():
-                        device = conf[3]
-                    else:
-                        params = [param.strip() for param in conf[3].split('-')]
-                        for param in params:
-                            p = [p.strip() for p in param.split(':')]
-                            param = p[0]
-                            if param == 'bias':
-                                conv_bias = int(p[1])
-                            elif param == 'fwidths':
-                                fnet_widths = ast.literal_eval(p[1].replace('#', ','))
-                            elif param == 'ftanh':
-                                fnet_tanh = int(p[1])
-
-                        if len(conf) == 5:
-                            device = conf[4]
-
-                        elif len(conf) > 5:
-                            raise RuntimeError("Invalid parameters in {} MUNEGC layer".format(d))
-
-                module = ext.MUNEGC(nfeat, nfeato,
-                                    neighs=n_neigh,
-                                    fnetw=fnet_widths,
-                                    edge_attr=edge_attr,
-                                    fnet_llbias=fnet_llbias,
-                                    fnet_tanh=fnet_tanh,
-                                    bias=conv_bias,
-                                    aggr='avg',
-                                    flow=self.flow)
+                module = ext.MUNEGC(
+                    nfeat,
+                    nfeato,
+                    neighs=n_neigh,
+                    fnetw=fnet_widths,
+                    edge_attr=["posspherical"],
+                    edge_attr_feat=["featureoffsets"],
+                    fnet_llbias=fnet_llbias,
+                    fnet_tanh=fnet_tanh,
+                    bias=conv_bias,
+                    aggr="avg",
+                    flow=self.flow,
+                )
 
                 nfeat = nfeato
 
             # MultiGraphConvolution
-            elif conf[0] == 'multigraphconvmax':
+            elif conf[0] == "multigraphconv":
                 if len(conf) < 3:
-                    raise RuntimeError("{} MUNEGC layer requires as argument the output features".format(d))
+                    raise RuntimeError(
+                        "{} MUNEGC layer requires as argument the output features".format(
+                            d
+                        )
+                    )
                 n_neigh = int(conf[1])
                 nfeato = int(conf[2])
                 if len(conf) > 3:
                     if conf[3].isdigit():
                         device = conf[3]
                     else:
-                        params = [param.strip() for param in conf[3].split('-')]
+                        params = [param.strip() for param in conf[3].split("-")]
                         for param in params:
-                            p = [p.strip() for p in param.split(':')]
+                            p = [p.strip() for p in param.split(":")]
                             param = p[0]
-                            if param == 'bias':
+                            if param == "bias":
                                 conv_bias = int(p[1])
-                            elif param == 'fwidths':
-                                fnet_widths = ast.literal_eval(p[1].replace('#', ','))
-                            elif param == 'ftanh':
+                            elif param == "fwidths":
+                                fnet_widths = ast.literal_eval(p[1].replace("#", ","))
+                            elif param == "ftanh":
                                 fnet_tanh = int(p[1])
 
                         if len(conf) == 5:
                             device = conf[4]
 
                         elif len(conf) > 5:
-                            raise RuntimeError("Invalid parameters in {} MUNEGC layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} MUNEGC layer".format(d)
+                            )
 
-                module = ext.MUNEGC(nfeat, nfeato,
-                                    neighs=n_neigh,
-                                    fnetw=fnet_widths,
-                                    edge_attr=edge_attr,
-                                    fnet_llbias=fnet_llbias,
-                                    fnet_tanh=fnet_tanh,
-                                    bias=conv_bias,
-                                    aggr='max',
-                                    flow=self.flow)
+                module = ext.MUNEGC(
+                    nfeat,
+                    nfeato,
+                    neighs=n_neigh,
+                    fnetw=fnet_widths,
+                    edge_attr=edge_attr,
+                    fnet_llbias=fnet_llbias,
+                    fnet_tanh=fnet_tanh,
+                    bias=conv_bias,
+                    aggr="avg",
+                    flow=self.flow,
+                )
+
+                nfeat = nfeato
+
+            # MultiGraphConvolution
+            elif conf[0] == "multigraphconvmax":
+                if len(conf) < 3:
+                    raise RuntimeError(
+                        "{} MUNEGC layer requires as argument the output features".format(
+                            d
+                        )
+                    )
+                n_neigh = int(conf[1])
+                nfeato = int(conf[2])
+                if len(conf) > 3:
+                    if conf[3].isdigit():
+                        device = conf[3]
+                    else:
+                        params = [param.strip() for param in conf[3].split("-")]
+                        for param in params:
+                            p = [p.strip() for p in param.split(":")]
+                            param = p[0]
+                            if param == "bias":
+                                conv_bias = int(p[1])
+                            elif param == "fwidths":
+                                fnet_widths = ast.literal_eval(p[1].replace("#", ","))
+                            elif param == "ftanh":
+                                fnet_tanh = int(p[1])
+
+                        if len(conf) == 5:
+                            device = conf[4]
+
+                        elif len(conf) > 5:
+                            raise RuntimeError(
+                                "Invalid parameters in {} MUNEGC layer".format(d)
+                            )
+
+                module = ext.MUNEGC(
+                    nfeat,
+                    nfeato,
+                    neighs=n_neigh,
+                    fnetw=fnet_widths,
+                    edge_attr=edge_attr,
+                    fnet_llbias=fnet_llbias,
+                    fnet_tanh=fnet_tanh,
+                    bias=conv_bias,
+                    aggr="max",
+                    flow=self.flow,
+                )
                 nfeat = nfeato
 
             # MultiGraphConvolutionGen
-            elif conf[0] == 'multigraphconvradbasedgen':
+            elif conf[0] == "multigraphconvradbasedgen":
                 if len(conf) < 5:
-                    raise RuntimeError("{} MUNEGC layer requires as argument the output features".format(d))
+                    raise RuntimeError(
+                        "{} MUNEGC layer requires as argument the output features".format(
+                            d
+                        )
+                    )
                 n_neigh = int(conf[1])
                 rad_neigh = float(conf[2])
                 nfeato = int(conf[4])
@@ -276,38 +361,45 @@ class GraphNetwork(torch.nn.Module):
                     if conf[5].isdigit():
                         device = conf[5]
                     else:
-                        params = [param.strip() for param in conf[5].split('-')]
+                        params = [param.strip() for param in conf[5].split("-")]
                         for param in params:
-                            p = [p.strip() for p in param.split(':')]
+                            p = [p.strip() for p in param.split(":")]
                             param = p[0]
-                            if param == 'bias':
+                            if param == "bias":
                                 conv_bias = int(p[1])
-                            elif param == 'fwidths':
-                                fnet_widths = ast.literal_eval(p[1].replace('#', ','))
-                            elif param == 'ftanh':
+                            elif param == "fwidths":
+                                fnet_widths = ast.literal_eval(p[1].replace("#", ","))
+                            elif param == "ftanh":
                                 fnet_tanh = int(p[1])
 
                         if len(conf) == 7:
                             device = conf[6]
 
                         elif len(conf) > 7:
-                            raise RuntimeError("Invalid parameters in {} MUNEGC layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} MUNEGC layer".format(d)
+                            )
 
-                module = ext.MUNEGC(nfeat, nfeato,
-                                    neighs=n_neigh,
-                                    rad_neigh=rad_neigh,
-                                    fnetw=fnet_widths,
-                                    edge_attr=edge_attr,
-                                    fnet_llbias=fnet_llbias,
-                                    fnet_tanh=fnet_tanh,
-                                    bias=conv_bias,
-                                    aggr=aggr,
-                                    flow=self.flow)
+                module = ext.MUNEGC(
+                    nfeat,
+                    nfeato,
+                    neighs=n_neigh,
+                    rad_neigh=rad_neigh,
+                    fnetw=fnet_widths,
+                    edge_attr=edge_attr,
+                    fnet_llbias=fnet_llbias,
+                    fnet_tanh=fnet_tanh,
+                    bias=conv_bias,
+                    aggr=aggr,
+                    flow=self.flow,
+                )
                 nfeat = nfeato
 
-            elif conf[0] == 'pvknn':
+            elif conf[0] == "pvknn":
                 if len(conf) < 4:
-                    raise RuntimeError("{} Pool layer requires more arguments".format(d))
+                    raise RuntimeError(
+                        "{} Pool layer requires more arguments".format(d)
+                    )
                 aggr = conf[1]
                 pradius = float(conf[2])
                 nn = int(conf[3])
@@ -315,22 +407,30 @@ class GraphNetwork(torch.nn.Module):
                     if conf[4].isdigit():
                         device = conf[4]
                     else:
-                        edge_attr = [attr.strip() for attr in conf[4].split('-')]
+                        edge_attr = [attr.strip() for attr in conf[4].split("-")]
                         if len(conf) == 6:
                             device = conf[5]
                         elif len(conf) > 6:
-                            raise RuntimeError("Invalid parameters in {} pool layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} pool layer".format(d)
+                            )
 
-                module = ext.VGraphPooling(pradius, aggr=aggr,
-                                           neighs=nn, self_loop=True,
-                                           edge_attr=edge_attr,
-                                           flow=self.flow)
+                module = ext.VGraphPooling(
+                    pradius,
+                    aggr=aggr,
+                    neighs=nn,
+                    self_loop=True,
+                    edge_attr=edge_attr,
+                    flow=self.flow,
+                )
 
                 nEdgeAttr = ext.numberEdgeAttr(edge_attr, nfeat)
 
-            elif conf[0] == 'pvrnn':
+            elif conf[0] == "pvrnn":
                 if len(conf) < 5:
-                    raise RuntimeError("{} Pool layer requires more arguments".format(d))
+                    raise RuntimeError(
+                        "{} Pool layer requires more arguments".format(d)
+                    )
                 aggr = conf[1]
                 pradius = float(conf[2])
                 rad_neigh = float(conf[3])
@@ -340,23 +440,32 @@ class GraphNetwork(torch.nn.Module):
                     if conf[5].isdigit():
                         device = conf[5]
                     else:
-                        edge_attr = [attr.strip() for attr in conf[5].split('-')]
+                        edge_attr = [attr.strip() for attr in conf[5].split("-")]
                         if len(conf) == 7:
                             device = conf[6]
                         elif len(conf) > 7:
-                            raise RuntimeError("Invalid parameters in {} pool layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} pool layer".format(d)
+                            )
 
-                module = ext.VGraphPooling(pradius, aggr=aggr,
-                                            neighs=nn, rad_neigh=rad_neigh,
-                                            self_loop=True, edge_attr=edge_attr,
-                                            flow=self.flow)
+                module = ext.VGraphPooling(
+                    pradius,
+                    aggr=aggr,
+                    neighs=nn,
+                    rad_neigh=rad_neigh,
+                    self_loop=True,
+                    edge_attr=edge_attr,
+                    flow=self.flow,
+                )
 
                 nEdgeAttr = ext.numberEdgeAttr(edge_attr, nfeat)
 
             # voxel  pooling
-            elif conf[0] == 'pv':
+            elif conf[0] == "pv":
                 if len(conf) < 3:
-                    raise RuntimeError("{} Pool layer requires more arguments".format(d))
+                    raise RuntimeError(
+                        "{} Pool layer requires more arguments".format(d)
+                    )
                 aggr = conf[1]
                 pradius = float(conf[2])
                 if len(conf) == 4:
@@ -366,9 +475,11 @@ class GraphNetwork(torch.nn.Module):
 
             # nearest voxel pooling
 
-            elif conf[0] == 'pnv':
+            elif conf[0] == "pnv":
                 if len(conf) < 3:
-                    raise RuntimeError("{} Pool layer requires more arguments".format(d))
+                    raise RuntimeError(
+                        "{} Pool layer requires more arguments".format(d)
+                    )
                 aggr = conf[1]
                 pradius = float(conf[2])
                 if len(conf) == 4:
@@ -377,9 +488,11 @@ class GraphNetwork(torch.nn.Module):
                 module = ext.NVPooling(pool_rad=pradius, aggr=aggr)
 
             # KNN pooling layer nearest voxel
-            elif conf[0] == 'pnvknn':
+            elif conf[0] == "pnvknn":
                 if len(conf) < 4:
-                    raise RuntimeError("{} Pool layer requires more arguments".format(d))
+                    raise RuntimeError(
+                        "{} Pool layer requires more arguments".format(d)
+                    )
                 aggr = conf[1]
                 pradius = float(conf[2])
                 nn = int(conf[3])
@@ -387,23 +500,31 @@ class GraphNetwork(torch.nn.Module):
                     if conf[4].isdigit():
                         device = conf[4]
                     else:
-                        edge_attr = [attr.strip() for attr in conf[4].split('-')]
+                        edge_attr = [attr.strip() for attr in conf[4].split("-")]
                         if len(conf) == 6:
                             device = conf[5]
                         elif len(conf) > 6:
-                            raise RuntimeError("Invalid parameters in {} pool layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} pool layer".format(d)
+                            )
 
-                module = ext.NVGraphPooling(pradius, aggr=aggr,
-                                            neighs=nn, self_loop=True,
-                                            edge_attr=edge_attr,
-                                            flow=self.flow)
+                module = ext.NVGraphPooling(
+                    pradius,
+                    aggr=aggr,
+                    neighs=nn,
+                    self_loop=True,
+                    edge_attr=edge_attr,
+                    flow=self.flow,
+                )
 
                 nEdgeAttr = ext.numberEdgeAttr(edge_attr, nfeat)
 
             # Radius pooling layer nearest voxel
-            elif conf[0] == 'pnvrnn':
+            elif conf[0] == "pnvrnn":
                 if len(conf) < 5:
-                    raise RuntimeError("{} Pool layer requires more arguments".format(d))
+                    raise RuntimeError(
+                        "{} Pool layer requires more arguments".format(d)
+                    )
                 aggr = conf[1]
                 pradius = float(conf[2])
                 rad_neigh = float(conf[3])
@@ -413,19 +534,26 @@ class GraphNetwork(torch.nn.Module):
                     if conf[5].isdigit():
                         device = conf[5]
                     else:
-                        edge_attr = [attr.strip() for attr in conf[5].split('-')]
+                        edge_attr = [attr.strip() for attr in conf[5].split("-")]
                         if len(conf) == 7:
                             device = conf[6]
                         elif len(conf) > 7:
-                            raise RuntimeError("Invalid parameters in {} pool layer".format(d))
-                module = ext.NVGraphPooling(pradius, aggr=aggr,
-                                            neighs=nn, rad_neigh=rad_neigh,
-                                            self_loop=True, edge_attr=edge_attr,
-                                            flow=self.flow)
+                            raise RuntimeError(
+                                "Invalid parameters in {} pool layer".format(d)
+                            )
+                module = ext.NVGraphPooling(
+                    pradius,
+                    aggr=aggr,
+                    neighs=nn,
+                    rad_neigh=rad_neigh,
+                    self_loop=True,
+                    edge_attr=edge_attr,
+                    flow=self.flow,
+                )
 
                 nEdgeAttr = ext.numberEdgeAttr(edge_attr, nfeat)
 
-            elif conf[0] == 'gp':
+            elif conf[0] == "gp":
                 if len(conf) < 2:
                     raise RuntimeError("Global Pooling Layer needs more arguments")
                 aggr = conf[1]
@@ -434,17 +562,21 @@ class GraphNetwork(torch.nn.Module):
                 if len(conf) == 3:
                     device = conf[2]
             # change edge atribs
-            elif conf[0] == 'eg':
+            elif conf[0] == "eg":
                 if len(conf) > 1:
                     if conf[1].isdigit():
                         device = conf[1]
 
                     else:
-                        edge_attr = [attr.strip() for attr in conf[1].split('-')]
+                        edge_attr = [attr.strip() for attr in conf[1].split("-")]
                         if len(conf) == 3:
                             device = conf[2]
                         elif len(conf) > 3:
-                            raise RuntimeError("Invalid parameters in {} edge_generation layer".format(d))
+                            raise RuntimeError(
+                                "Invalid parameters in {} edge_generation layer".format(
+                                    d
+                                )
+                            )
 
                 module = ext.GraphReg(knn=None, edge_attr=edge_attr, flow=self.flow)
                 nEdgeAttr = ext.numberEdgeAttr(edge_attr, nfeat)
@@ -455,8 +587,14 @@ class GraphNetwork(torch.nn.Module):
             # Adding layer to modules
             if self.multigpu is True:
                 if device is None:
-                    raise RuntimeError("Multigpu is enabled and layer {} does not have a gpu assigned.".format(d))
-                device = torch.device("cuda" if torch.cuda.is_available() and device == '0' else "cpu")
+                    raise RuntimeError(
+                        "Multigpu is enabled and layer {} does not have a gpu assigned.".format(
+                            d
+                        )
+                    )
+                device = torch.device(
+                    "cuda" if torch.cuda.is_available() and device == "0" else "cpu"
+                )
                 self.devices.append(device)
                 module = module.to(device)
             self.add_module(str(d), module)
@@ -469,16 +607,20 @@ class GraphNetwork(torch.nn.Module):
         for i, module in enumerate(self._modules.values()):
             if self.multigpu:
                 data = data.to(self.devices[i])
-            if type(module) == torch.nn.Linear or \
-               type(module) == torch.nn.BatchNorm1d or \
-               type(module) == torch.nn.Dropout or \
-               type(module) == torch.nn.ReLU:
-                if (type(data) == torch_geometric.data.batch.Batch or
-                        type(data) == torch_geometric.data.data.Data):
+            if (
+                type(module) == torch.nn.Linear
+                or type(module) == torch.nn.BatchNorm1d
+                or type(module) == torch.nn.Dropout
+                or type(module) == torch.nn.ReLU
+            ):
+                if (
+                    type(data) == torch_geometric.data.batch.Batch
+                    or type(data) == torch_geometric.data.data.Data
+                ):
 
                     data.x = module(data.x)
 
-                elif (type(data) == torch.Tensor):
+                elif type(data) == torch.Tensor:
 
                     data = module(data)
 
@@ -489,12 +631,14 @@ class GraphNetwork(torch.nn.Module):
             elif type(module) == ext.AGC:
                 data.x = module(data.x, data.edge_index, data.edge_attr.float())
 
-            elif type(module) == ext.NVGraphPooling or\
-                    type(module) == ext.VGraphPooling or\
-                    type(module) == ext.VPooling or\
-                    type(module) == ext.NVPooling or\
-                    type(module) == ext.MUNEGC or\
-                    type(module) == ext.GraphReg:
+            elif (
+                type(module) == ext.NVGraphPooling
+                or type(module) == ext.VGraphPooling
+                or type(module) == ext.VPooling
+                or type(module) == ext.NVPooling
+                or type(module) == ext.MUNEGC
+                or type(module) == ext.GraphReg
+            ):
 
                 data = module(data)
 
@@ -509,6 +653,7 @@ class GraphNetwork(torch.nn.Module):
                     return data
 
         return data
+
 
 class MultiModalGroupFusion(torch.nn.Module):
     def __init__(self, pool_rad):
@@ -526,19 +671,21 @@ class MultiModalGroupFusion(torch.nn.Module):
         start = pos.min(dim=0)[0] - self.pool_rad * 0.5
         end = pos.max(dim=0)[0] + self.pool_rad * 0.5
 
-        cluster = torch_geometric.nn.voxel_grid(pos, self.pool_rad, batch, start=start, end=end)
+        cluster = torch_geometric.nn.voxel_grid(
+            pos, self.pool_rad, batch, start=start, end=end
+        )
         cluster, perm = consecutive_cluster(cluster)
 
-        superpoint = scatter(pos, cluster, dim=0, reduce='mean')
+        superpoint = scatter(pos, cluster, dim=0, reduce="mean")
         new_batch = batch[perm]
 
         cluster = nearest(pos, superpoint, batch, new_batch)
 
         cluster, perm = consecutive_cluster(cluster)
 
-        pos = scatter(pos, cluster, dim=0, reduce='mean')
+        pos = scatter(pos, cluster, dim=0, reduce="mean")
         branch_mask = torch.zeros(batch.size(0)).bool()
-        branch_mask[0:b1.batch.size(0)] = 1
+        branch_mask[0 : b1.batch.size(0)] = 1
 
         cluster = cluster[inv_indx]
 
@@ -547,8 +694,8 @@ class MultiModalGroupFusion(torch.nn.Module):
         x_b1 = torch.ones(nVoxels, b1.x.shape[1], device=b1.x.device)
         x_b2 = torch.ones(nVoxels, b2.x.shape[1], device=b2.x.device)
 
-        x_b1 = scatter(b1.x, cluster[branch_mask], dim=0, out=x_b1, reduce='mean')
-        x_b2 = scatter(b2.x, cluster[~branch_mask], dim=0, out=x_b2, reduce='mean')
+        x_b1 = scatter(b1.x, cluster[branch_mask], dim=0, out=x_b1, reduce="mean")
+        x_b2 = scatter(b2.x, cluster[~branch_mask], dim=0, out=x_b2, reduce="mean")
 
         x = torch.cat([x_b1, x_b2], 1)
 
@@ -563,31 +710,44 @@ class MultiModalGroupFusion(torch.nn.Module):
         return b1
 
     def extra_repr(self):
-        s = 'pool_rad: {pool_rad}'
+        s = "pool_rad: {pool_rad}"
         return s.format(**self.__dict__)
 
 
 class TwoStreamNetwork(torch.nn.Module):
-    def __init__(self, graph_net_conf,
-                 features_b1, features_b2, rad_fuse_pool,
-                 features_proj_b1=64,
-                 features_proj_b2=64,
-                 proj_b1=True,
-                 proj_b2=True):
+    def __init__(
+        self,
+        graph_net_conf,
+        features_b1,
+        features_b2,
+        rad_fuse_pool,
+        features_proj_b1=64,
+        features_proj_b2=64,
+        proj_b1=True,
+        proj_b2=True,
+    ):
 
         super(TwoStreamNetwork, self).__init__()
         self.rad_fuse_pool = float(rad_fuse_pool)
         if proj_b1:
-            self.proj_b1 = torch.nn.Sequential(torch.nn.ReLU(), torch.nn.Conv1d(
-                features_b1, features_proj_b1, kernel_size=1, bias=False))
+            self.proj_b1 = torch.nn.Sequential(
+                torch.nn.ReLU(),
+                torch.nn.Conv1d(
+                    features_b1, features_proj_b1, kernel_size=1, bias=False
+                ),
+            )
 
             features_b1 = features_proj_b1
         else:
             self.proj_b1 = None
 
         if proj_b2:
-            self.proj_b2 = torch.nn.Sequential(torch.nn.ReLU(), torch.nn.Conv1d(
-                features_b2, features_proj_b2, kernel_size=1, bias=False))
+            self.proj_b2 = torch.nn.Sequential(
+                torch.nn.ReLU(),
+                torch.nn.Conv1d(
+                    features_b2, features_proj_b2, kernel_size=1, bias=False
+                ),
+            )
             features_b2 = features_proj_b2
         else:
             self.proj_b2 = None
@@ -607,8 +767,12 @@ class TwoStreamNetwork(torch.nn.Module):
         if self.proj_b2 is not None:
             x_b2 = self.proj_b2(x_b2)
 
-        data_b1.x = x_b1.permute(0, 2, 1).reshape(-1, x_b1.size(1))[batch_b1[1].view(-1)]
-        data_b2.x = x_b2.permute(0, 2, 1).reshape(-1, x_b2.size(1))[batch_b2[1].view(-1)]
+        data_b1.x = x_b1.permute(0, 2, 1).reshape(-1, x_b1.size(1))[
+            batch_b1[1].view(-1)
+        ]
+        data_b2.x = x_b2.permute(0, 2, 1).reshape(-1, x_b2.size(1))[
+            batch_b2[1].view(-1)
+        ]
 
         data = self.multimodal_gp_fusion(data_b1, data_b2)
         return self.class_network(data)

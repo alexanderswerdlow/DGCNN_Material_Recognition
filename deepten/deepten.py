@@ -15,7 +15,9 @@ from encoding.nn import Encoding, View, Normalize
 from encoding.models.backbone import resnet50s, resnet101s, resnet152s
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
-pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
+pre_transform, transform = T.NormalizeScale(), T.FixedPoints(
+    1024
+)  # T.SamplePoints(1024)
 train_dataset = GeoMat(path, True, transform, pre_transform)
 test_dataset = GeoMat(path, False, transform, pre_transform)
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=6)
@@ -77,7 +79,11 @@ def train():
 
     train_true = np.concatenate(train_true)
     train_pred = np.concatenate(train_pred)
-    return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred)
+    return (
+        train_loss / len(train_dataset),
+        metrics.accuracy_score(train_true, train_pred),
+        metrics.balanced_accuracy_score(train_true, train_pred),
+    )
 
 
 def test():

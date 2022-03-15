@@ -22,6 +22,8 @@ export CPATH=/usr/local/cuda/include:$CPATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 ```
 
+The GeoMat dataset can be found [here](http://josephdegol.com/pages/MatRec_CVPR16.html). You must download all 19 zip files (one per class) and extract the folders to `data/geomat/raw`.
+
 ## Run instructions
 
 ```shell
@@ -52,7 +54,10 @@ rm -f data/fusion/2d/test/* && rm -f data/fusion/2d/train/*
 
 ## Training log
 
-geomat_classification_v1: (DG-V2)
-geomat_classification_v6: (DG-V3)
-geomat_classification_v7: (DG-V1)
-geomat_classification_v8: (DG-V4)
+geomat_classification_v7: (DG-V1), 1205075 params
+geomat_classification_v1: (DG-V2), 1279251 params
+geomat_classification_v6: (DG-V3), 1525075 params, 196259539 params (backbone)
+geomat_classification_v8: (DG-V4), 926675 params, 87585939 params (backbone)
+
+To get number of params: `print(sum(dict((p.data_ptr(), p.numel()) for p in model.parameters()).values()))`
+

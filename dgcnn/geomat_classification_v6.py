@@ -14,16 +14,22 @@ from tqdm import tqdm
 import timm
 from timm.loss import LabelSmoothingCrossEntropy
 
-path = f'{get_data_dir()}/geomat'
+path = f"{get_data_dir()}/geomat"
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1000)
-img_model = timm.create_model("convnext_large", num_classes=19, drop_path_rate=0.8).cuda()
-checkpoint = torch.load(f"{get_data_dir()}/checkpoints/texture_train_large_best_model.pt")
+img_model = timm.create_model(
+    "convnext_large", num_classes=19, drop_path_rate=0.8
+).cuda()
+checkpoint = torch.load(
+    f"{get_data_dir()}/checkpoints/texture_train_large_best_model.pt"
+)
 img_model.load_state_dict(checkpoint["state_dict"])
 del checkpoint
-# print('v6', sum(dict((p.data_ptr(), p.numel()) for p in img_model.parameters()).values()))
-# exit()
-train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction="v6", img_model=img_model)
-test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction="v6", img_model=img_model)
+train_dataset = GeoMat(
+    path, True, transform, pre_transform, feature_extraction="v6", img_model=img_model
+)
+test_dataset = GeoMat(
+    path, False, transform, pre_transform, feature_extraction="v6", img_model=img_model
+)
 train_loader = DataLoader(train_dataset, batch_size=21, shuffle=True, num_workers=0)
 test_loader = DataLoader(test_dataset, batch_size=21, shuffle=False, num_workers=0)
 
@@ -32,16 +38,55 @@ class Net(torch.nn.Module):
     def __init__(self, out_channels, k=20, aggr="max", feat_size=1344):
         super().__init__()
         self.filter_conv = nn.Conv2d(feat_size, 128, 1)  # reduce filter size
-        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 128), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
-        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
-        self.conv3 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
-        self.fc1 = MLP([256 + 128 + 64 + 128, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8)
+        self.conv1 = DynamicEdgeConv(
+            MLP(
+                [2 * (3 + 3 + 128), 64],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.8,
+            ),
+            k,
+            aggr,
+        )
+        self.conv2 = DynamicEdgeConv(
+            MLP(
+                [2 * 64, 128],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.8,
+            ),
+            k,
+            aggr,
+        )
+        self.conv3 = DynamicEdgeConv(
+            MLP(
+                [2 * 128, 256],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.8,
+            ),
+            k,
+            aggr,
+        )
+        self.fc1 = MLP(
+            [256 + 128 + 64 + 128, 1024],
+            act="LeakyReLU",
+            act_kwargs={"negative_slope": 0.2},
+            dropout=0.8,
+        )
         self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.8)
 
     def forward(self, data):
         # Feature Extraction must be in geomat.py so that torch_geometric can properly sample points
-        data.features = self.filter_conv(torch.unsqueeze(torch.unsqueeze(data.features.cuda(), dim=-1), dim=-1)).squeeze()
-        pos, x, batch, features = data.pos.cuda(), data.x.cuda(), data.batch.cuda(), data.features.cuda()
+        data.features = self.filter_conv(
+            torch.unsqueeze(torch.unsqueeze(data.features.cuda(), dim=-1), dim=-1)
+        ).squeeze()
+        pos, x, batch, features = (
+            data.pos.cuda(),
+            data.x.cuda(),
+            data.batch.cuda(),
+            data.features.cuda(),
+        )
         x1 = self.conv1(torch.cat((pos, x, features), dim=1).float(), batch)
         x2 = self.conv2(x1, batch)
         x3 = self.conv3(x2, batch)
@@ -69,7 +114,12 @@ def train():
 
     train_true = np.concatenate(train_true)
     train_pred = np.concatenate(train_pred)
-    return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred), cm
+    return (
+        train_loss / len(train_dataset),
+        metrics.accuracy_score(train_true, train_pred),
+        metrics.balanced_accuracy_score(train_true, train_pred),
+        cm,
+    )
 
 
 def test():
@@ -91,4 +141,6 @@ optimizer = torch.optim.RAdam(model.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
 model_name = os.path.basename(__file__).rstrip(".py")
-run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True)
+run_training(
+    model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True
+)

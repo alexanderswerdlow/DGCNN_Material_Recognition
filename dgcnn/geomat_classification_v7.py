@@ -14,7 +14,7 @@ from tqdm import tqdm
 import timm
 from timm.loss import LabelSmoothingCrossEntropy
 
-path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
+path = f"{get_data_dir()}/geomat"
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1000)
 train_dataset = GeoMat(path, True, transform, pre_transform)
 test_dataset = GeoMat(path, False, transform, pre_transform)
@@ -25,10 +25,42 @@ test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers
 class Net(torch.nn.Module):
     def __init__(self, out_channels, k=20, aggr="max"):
         super().__init__()
-        self.conv1 = DynamicEdgeConv(MLP([2 * 3, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
-        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
-        self.conv3 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
-        self.fc1 = MLP([256 + 128 + 64, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8)
+        self.conv1 = DynamicEdgeConv(
+            MLP(
+                [2 * 3, 64],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.8,
+            ),
+            k,
+            aggr,
+        )
+        self.conv2 = DynamicEdgeConv(
+            MLP(
+                [2 * 64, 128],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.8,
+            ),
+            k,
+            aggr,
+        )
+        self.conv3 = DynamicEdgeConv(
+            MLP(
+                [2 * 128, 256],
+                act="LeakyReLU",
+                act_kwargs={"negative_slope": 0.2},
+                dropout=0.8,
+            ),
+            k,
+            aggr,
+        )
+        self.fc1 = MLP(
+            [256 + 128 + 64, 1024],
+            act="LeakyReLU",
+            act_kwargs={"negative_slope": 0.2},
+            dropout=0.8,
+        )
         self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.8)
 
     def forward(self, data):
@@ -60,7 +92,12 @@ def train():
 
     train_true = np.concatenate(train_true)
     train_pred = np.concatenate(train_pred)
-    return train_loss / len(train_dataset), metrics.accuracy_score(train_true, train_pred), metrics.balanced_accuracy_score(train_true, train_pred), cm
+    return (
+        train_loss / len(train_dataset),
+        metrics.accuracy_score(train_true, train_pred),
+        metrics.balanced_accuracy_score(train_true, train_pred),
+        cm,
+    )
 
 
 def test():
@@ -83,4 +120,6 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
 model_name = os.path.basename(__file__).rstrip(".py")
 
-run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True)
+run_training(
+    model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True
+)

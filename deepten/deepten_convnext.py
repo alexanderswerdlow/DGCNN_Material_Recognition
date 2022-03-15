@@ -15,8 +15,8 @@ from encoding.nn import Encoding, View, Normalize
 import timm
 import fusion.convnext
 
-img_model = timm.create_model("convnext_base", num_classes=19, drop_path_rate=0.8).cuda()
-checkpoint = torch.load(f"{get_data_dir()}/checkpoints/texture_train_base_best_model.pt")
+img_model = timm.create_model("convnext_large", num_classes=19, drop_path_rate=0.8).cuda()
+checkpoint = torch.load(f"{get_data_dir()}/checkpoints/texture_train_large_best_model.pt")
 img_model.load_state_dict(checkpoint["state_dict"])
 del checkpoint
 

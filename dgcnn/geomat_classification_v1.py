@@ -8,9 +8,9 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.nn import MLP, DynamicEdgeConv, global_max_pool
 import sklearn.metrics as metrics
 import os.path
-from util import criterion, run_training
+from util import criterion, run_training, get_data_dir
 
-path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
+path = f'{get_data_dir()}/geomat'
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
 train_dataset = GeoMat(path, True, transform, pre_transform)
 test_dataset = GeoMat(path, False, transform, pre_transform)
@@ -79,5 +79,4 @@ model = Net(in_channels=6, out_channels=19, k=20).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 model_name = os.path.basename(__file__).rstrip(".py")
-
 run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200)

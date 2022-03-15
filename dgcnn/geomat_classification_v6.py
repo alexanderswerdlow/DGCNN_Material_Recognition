@@ -14,12 +14,14 @@ from tqdm import tqdm
 import timm
 from timm.loss import LabelSmoothingCrossEntropy
 
-path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
+path = f'{get_data_dir()}/geomat'
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1000)
 img_model = timm.create_model("convnext_large", num_classes=19, drop_path_rate=0.8).cuda()
 checkpoint = torch.load(f"{get_data_dir()}/checkpoints/texture_train_large_best_model.pt")
 img_model.load_state_dict(checkpoint["state_dict"])
 del checkpoint
+# print('v6', sum(dict((p.data_ptr(), p.numel()) for p in img_model.parameters()).values()))
+# exit()
 train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction="v6", img_model=img_model)
 test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction="v6", img_model=img_model)
 train_loader = DataLoader(train_dataset, batch_size=21, shuffle=True, num_workers=0)
@@ -89,5 +91,4 @@ optimizer = torch.optim.RAdam(model.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
 model_name = os.path.basename(__file__).rstrip(".py")
-
 run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True)

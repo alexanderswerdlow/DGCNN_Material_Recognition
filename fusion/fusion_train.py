@@ -59,7 +59,7 @@ def test():
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = TwoStreamNetwork(
-    "b,r,gp_avg,d_0.5,f_19_cp_1", features_b1=128, features_b2=896, rad_fuse_pool=0.24, features_proj_b1=512, features_proj_b2=512, proj_b1=True, proj_b2=True
+    "b,r,gp_avg,d_0.5,f_19_cp_1", features_b1=128, features_b2=1344, rad_fuse_pool=0.24, features_proj_b1=512, features_proj_b2=512, proj_b1=True, proj_b2=True
 ).to(device)
 optimizer = torch.optim.RAdam(model.parameters(), betas=(0.9, 0.999), lr=0.001, weight_decay=0.0001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)

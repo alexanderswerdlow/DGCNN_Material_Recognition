@@ -21,8 +21,8 @@ img_model.load_state_dict(checkpoint["state_dict"])
 del checkpoint
 train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction="v5", img_model=img_model)
 test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction="v5", img_model=img_model)
-train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0)
-test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False, num_workers=0)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=0)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=0)
 
 
 class Net(torch.nn.Module):

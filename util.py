@@ -95,7 +95,7 @@ def run_training(model_name, train, test, model, optimizer, scheduler, total_epo
             best_test_acc = 0
     else:
         best_test_acc = 0
-        got_prev_acc = False
+        got_prev_acc = True
 
     last_checkpoint = f"data/checkpoints/{model_name}_checkpoint.pt"
     if os.path.isfile(last_checkpoint):

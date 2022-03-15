@@ -48,14 +48,14 @@ rm -f data/fusion/2d/test/* && rm -f data/fusion/2d/train/*
 
 ## Training log
 
-geomat_classification_v1: No image features used, knn=20, lr=0.001, Adam
+geomat_classification_v1: (DG-V2) No image features used, knn=20, lr=0.001, Adam
 geomat_classification_v2: Used efficientnet_b3a pretrained features (136 dim) from second to last layer, knn=40, lr=0.001, Adam
 geomat_classification_v3: Used convnext_base pretrained features (all 4 layers to 14x14x1920), knn=40, lr=0.001, RAdam
 geomat_classification_v4: Used convnext_base trained features from texture_train_large (all 4 layers to 14x14x1920), knn=40, lr=0.001, RAdam
 geomat_classification_v5: 
-geomat_classification_v6: 
-geomat_classification_v7: 
-geomat_classification_v8: Lightweight, image features only passed to fully connected layers
+geomat_classification_v6: (DG-V3)
+geomat_classification_v7: (DG-V1)
+geomat_classification_v8: (DG-V4) Lightweight, image features only passed to fully connected layers
 geomat_classification_v9: v3 but with convnext_large
 
 

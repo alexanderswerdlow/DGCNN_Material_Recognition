@@ -75,11 +75,11 @@ def extract_features(loader, loader_name):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = timm.create_model("convnext_base", pretrained=True, num_classes=19, drop_path_rate=0.8).cuda()
+    model = timm.create_model("convnext_large", pretrained=True, num_classes=19, drop_path_rate=0.8).cuda()
     optimizer = torch.optim.RAdam(model.parameters(), lr=0.00005)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
-    model_name = os.path.basename(__file__).rstrip(".py") + "_base_all_layers"
+    model_name = os.path.basename(__file__).rstrip(".py") + "_large_all_layers"
 
     run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=50)
 

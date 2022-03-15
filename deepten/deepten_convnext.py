@@ -24,7 +24,7 @@ checkpoint = torch.load(
 img_model.load_state_dict(checkpoint["state_dict"])
 del checkpoint
 
-path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
+path = f"{get_data_dir()}/geomat"
 pre_transform = T.NormalizeScale()
 train_dataset = GeoMat(path, True, pre_transform)
 test_dataset = GeoMat(path, False, pre_transform)

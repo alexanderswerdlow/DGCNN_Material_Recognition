@@ -136,7 +136,7 @@ def run_training(model_name, train, test, model, optimizer, scheduler, total_epo
 class ConfusionMatrixMeter():
     def __init__(self, cmap='orange'):
         self._cmap = cmap
-        self.labels = ['Asphalt','Brick','Cement_Granular','Cement_Smooth','Concrete_Cast_in_Place','Concrete_Precast','Foliage','Grass','Gravel','Marble','Metal_Grills','Paving','pre_filter.pt','pre_transform.pt','Soil_Compact','Soil_Dirt_and_Vegetation','Soil_Loose','Soil_Mulch','Stone_Granular','Stone_Limestone','Wood']
+        self.labels = ['Asphalt','Brick','Cement_Granular','Cement_Smooth','Concrete_Cast_in_Place','Concrete_Precast','Foliage','Grass','Gravel','Marble','Metal_Grills','Paving','Soil_Compact','Soil_Dirt_and_Vegetation','Soil_Loose','Soil_Mulch','Stone_Granular','Stone_Limestone','Wood']
         self._k = len(self.labels)
         self._labels = self.labels
         self._cm = np.ndarray((self._k, self._k), dtype=np.int32)

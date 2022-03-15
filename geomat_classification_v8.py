@@ -29,7 +29,7 @@ class Net(torch.nn.Module):
     def __init__(self, out_channels, k=20, aggr="max", feat_size=896):
         super().__init__()
         self.filter_conv = nn.Conv2d(feat_size, 64, 1)  # reduce filter size
-        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 64), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
+        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
         self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8), k, aggr)
         self.fc1 = MLP([64 + 64 + 64, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.8)
         self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.8)
@@ -38,7 +38,7 @@ class Net(torch.nn.Module):
         # Feature Extraction must be in geomat.py so that torch_geometric can properly sample points
         data.features = self.filter_conv(torch.unsqueeze(torch.unsqueeze(data.features.cuda(), dim=-1), dim=-1)).squeeze()
         pos, x, batch, features = data.pos.cuda(), data.x.cuda(), data.batch.cuda(), data.features.cuda()
-        x1 = self.conv1(torch.cat((pos, x, features), dim=1).float(), batch)
+        x1 = self.conv1(torch.cat((pos, x), dim=1).float(), batch)
         x2 = self.conv2(x1, batch)
         out = self.fc1(torch.cat((x1, x2, features), dim=1))
         out = global_max_pool(out, batch)

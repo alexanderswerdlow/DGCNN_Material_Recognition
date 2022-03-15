@@ -79,10 +79,10 @@ if __name__ == "__main__":
     optimizer = torch.optim.RAdam(model.parameters(), lr=0.00005)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     criterion = LabelSmoothingCrossEntropy(smoothing=0.1)
-    model_name = os.path.basename(__file__).rstrip(".py") + "_base"
+    model_name = os.path.basename(__file__).rstrip(".py") + "_base_all_layers"
 
     run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=50)
 
-    model, optimizer, start_epoch = load_ckp("data/checkpoints/texture_train_base_best_model.pt", model, optimizer, scheduler)
+    model, optimizer, start_epoch = load_ckp(f"data/checkpoints/{model_name}_best_model.pt", model, optimizer, scheduler)
     extract_features(train_loader, "train")
     extract_features(test_loader, "test")

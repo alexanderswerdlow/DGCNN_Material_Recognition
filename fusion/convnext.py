@@ -252,13 +252,13 @@ class ConvNeXt(nn.Module):
 
         named_apply(partial(_init_weights, head_init_scale=head_init_scale), self)
 
-        self.stem.requires_grad = False
-        self.stages[0].requires_grad = False
-        self.stages[1].requires_grad = True
-        self.stages[2].requires_grad = True
-        self.stages[3].requires_grad = True
-        self.norm_pre.requires_grad = True
-        self.head.requires_grad = True
+        # self.stem.requires_grad = False
+        # self.stages[0].requires_grad = False
+        # self.stages[1].requires_grad = True
+        # self.stages[2].requires_grad = True
+        # self.stages[3].requires_grad = True
+        # self.norm_pre.requires_grad = True
+        # self.head.requires_grad = True
 
     def get_classifier(self):
         return self.head.fc

@@ -52,6 +52,12 @@ geomat_classification_v1: No image features used, knn=20, lr=0.001, Adam
 geomat_classification_v2: Used efficientnet_b3a pretrained features (136 dim) from second to last layer, knn=40, lr=0.001, Adam
 geomat_classification_v3: Used convnext_base pretrained features (all 4 layers to 14x14x1920), knn=40, lr=0.001, RAdam
 geomat_classification_v4: Used convnext_base trained features from texture_train_large (all 4 layers to 14x14x1920), knn=40, lr=0.001, RAdam
+geomat_classification_v5: 
+geomat_classification_v6: 
+geomat_classification_v7: 
+geomat_classification_v8: Lightweight, image features only passed to fully connected layers
+geomat_classification_v9: v3 but with convnext_large
+
 
 texture_train: Used convnext_base, all 4 stages frozen, dropout=0
 texture_train_large: Used convnext_large, stages 1 and prior params frozen, dropout=0.8

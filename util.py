@@ -43,11 +43,14 @@ def save_h5_features(fname_h5_feat2d, data_key, data_value):
     h5_file.close()
 
 
-def save_ckp(state, is_best, checkpoint_dir, model_name):
+def save_ckp(state, is_best, checkpoint_dir, model_name, epoch):
     f_path = f"{checkpoint_dir}/{model_name}_checkpoint.pt"
     torch.save(state, f_path)
     if is_best:
-        shutil.copyfile(f_path, f"{checkpoint_dir}/{model_name}_best_model.pt")
+        if epoch is not None:
+            shutil.copyfile(f_path, f"{checkpoint_dir}/{model_name}_best_model_epoch_{epoch}.pt")
+        else:
+            shutil.copyfile(f_path, f"{checkpoint_dir}/{model_name}_best_model.pt")
 
 
 def load_ckp(checkpoint_fpath, model, optimizer, scheduler):
@@ -84,9 +87,15 @@ def get_writer(model_name):
 def run_training(model_name, train, test, model, optimizer, scheduler, total_epochs, cm=False):
     best_checkpoint = f"data/checkpoints/{model_name}_best_model.pt"
     if os.path.isfile(best_checkpoint):
-        best_test_acc = torch.load(best_checkpoint)["test_acc"]
+        try:
+            best_test_acc = torch.load(best_checkpoint)["test_acc"]
+            got_prev_acc = True
+        except:
+            got_prev_acc = False
+            best_test_acc = 0
     else:
         best_test_acc = 0
+        got_prev_acc = False
 
     last_checkpoint = f"data/checkpoints/{model_name}_checkpoint.pt"
     if os.path.isfile(last_checkpoint):
@@ -115,7 +124,7 @@ def run_training(model_name, train, test, model, optimizer, scheduler, total_epo
         writer.add_scalar("Accuracy/test", test_acc, epoch)
 
         checkpoint = {"epoch": epoch + 1, "state_dict": model.state_dict(), "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(), "test_acc": test_acc}
-        save_ckp(checkpoint, test_acc >= best_test_acc, "data/checkpoints", model_name)
+        save_ckp(checkpoint, test_acc >= best_test_acc, "data/checkpoints", model_name, None if got_prev_acc else epoch)
 
         best_test_acc = max(test_acc, best_test_acc)
 

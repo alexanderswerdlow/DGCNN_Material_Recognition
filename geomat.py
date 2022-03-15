@@ -63,7 +63,7 @@ class GeoMat(Dataset):
                 self.img_model = timm.create_model("efficientnet_b3a", features_only=True, pretrained=True).cuda()
             elif self.feature_extraction == 'v3':
                 self.img_model = timm.create_model('convnext_base', pretrained=True).cuda()
-            elif self.feature_extraction == 'v4' or self.feature_extraction == 'v5':
+            elif self.feature_extraction == 'v4' or self.feature_extraction == 'v5' or self.feature_extraction == 'v6':
                 self.img_model = img_model
             else:
                 raise Exception('Invalid Feature Extraction Value')
@@ -99,7 +99,7 @@ class GeoMat(Dataset):
                     unpooled_features = self.img_model(img_batch.unsqueeze(0))[-2]
                 elif self.feature_extraction == 'v3' or self.feature_extraction == 'v4':
                     unpooled_features = self.img_model.get_features_concat(img_batch.unsqueeze(0))
-                elif self.feature_extraction == 'v5':
+                elif self.feature_extraction == 'v5' or self.feature_extraction == 'v6':
                     unpooled_features = self.img_model.get_features_concat_pool_only(img_batch.unsqueeze(0))
 
                 data.features = torchvision.ops.ps_roi_align(unpooled_features, self.boxes, 1).squeeze()

@@ -8,20 +8,26 @@ from geomat import GeoMat
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import MLP, DynamicEdgeConv, global_max_pool
 import sklearn.metrics as metrics
-from util import criterion, run_training
+from util import criterion, run_training, get_data_dir
 import os.path
 from tqdm import tqdm
+import timm
+import fusion.convnext
 
 path = osp.join(osp.dirname(osp.realpath(__file__)), "data/geomat")
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)
-train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v3')
-test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v3')
-train_loader = DataLoader(train_dataset, batch_size=9, shuffle=True, num_workers=0)
-test_loader = DataLoader(test_dataset, batch_size=9, shuffle=False, num_workers=0)
+img_model = timm.create_model("convnext_large", num_classes=19, drop_path_rate=0.8).cuda()
+checkpoint = torch.load(f"{get_data_dir()}/checkpoints/texture_train_large_best_model.pt")
+img_model.load_state_dict(checkpoint["state_dict"])
+del checkpoint
+train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction='v4', img_model=img_model)
+test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction='v4', img_model=img_model)
+train_loader = DataLoader(train_dataset, batch_size=19, shuffle=True, num_workers=0)
+test_loader = DataLoader(test_dataset, batch_size=19, shuffle=False, num_workers=0)
 
 
 class Net(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, k=20, aggr="max", feat_size=1920):
+    def __init__(self, in_channels, out_channels, k=20, aggr="max", feat_size=2880):
         super().__init__()
         self.filter_conv = nn.Conv2d(feat_size, 32, 1) # reduce filter size
         self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 32), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)

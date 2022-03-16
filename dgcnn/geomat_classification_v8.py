@@ -37,12 +37,7 @@ class Net(torch.nn.Module):
     def forward(self, data):
         # Feature Extraction must be in geomat.py so that torch_geometric can properly sample points
         data.features = self.filter_conv(torch.unsqueeze(torch.unsqueeze(data.features.cuda(), dim=-1), dim=-1)).squeeze()
-        pos, x, batch, features = (
-            data.pos.cuda(),
-            data.x.cuda(),
-            data.batch.cuda(),
-            data.features.cuda(),
-        )
+        pos, x, batch, features = (data.pos.cuda(), data.x.cuda(), data.batch.cuda(), data.features.cuda())
         x1 = self.conv1(torch.cat((pos, x), dim=1).float(), batch)
         x2 = self.conv2(x1, batch)
         out = self.fc1(torch.cat((x1, x2, features), dim=1))

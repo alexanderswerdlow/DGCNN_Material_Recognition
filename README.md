@@ -61,3 +61,8 @@ geomat_classification_v8: (DG-V4), 926675 params, 87585939 params (backbone)
 
 To get number of params: `print(sum(dict((p.data_ptr(), p.numel()) for p in model.parameters()).values()))`
 
+## Credit
+
+The ConvNeXt image backbone and corresponding pre-trained weights are taken from [here](https://github.com/facebookresearch/ConvNeXt)
+
+Implementation of the MUNEGC operator and geometric + fusion networks is adapted from [here](https://github.com/imatge-upc/munegc)

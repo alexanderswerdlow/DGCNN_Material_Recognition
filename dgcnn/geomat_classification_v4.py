@@ -16,20 +16,12 @@ import timm
 
 path = f"{get_data_dir()}/geomat"
 pre_transform, transform = T.NormalizeScale(), T.FixedPoints(2048)
-img_model = timm.create_model(
-    "convnext_base", num_classes=19, drop_path_rate=0.8
-).cuda()
-checkpoint = torch.load(
-    f"{get_data_dir()}/checkpoints/texture_train_base_best_model.pt"
-)
+img_model = timm.create_model("convnext_base", num_classes=19, drop_path_rate=0.8).cuda()
+checkpoint = torch.load(f"{get_data_dir()}/checkpoints/texture_train_base_best_model.pt")
 img_model.load_state_dict(checkpoint["state_dict"])
 del checkpoint
-train_dataset = GeoMat(
-    path, True, transform, pre_transform, feature_extraction="v4", img_model=img_model
-)
-test_dataset = GeoMat(
-    path, False, transform, pre_transform, feature_extraction="v4", img_model=img_model
-)
+train_dataset = GeoMat(path, True, transform, pre_transform, feature_extraction="v4", img_model=img_model)
+test_dataset = GeoMat(path, False, transform, pre_transform, feature_extraction="v4", img_model=img_model)
 train_loader = DataLoader(train_dataset, batch_size=10, shuffle=True, num_workers=0)
 test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=0)
 
@@ -38,59 +30,16 @@ class Net(torch.nn.Module):
     def __init__(self, out_channels, k=20, aggr="max", feat_size=1920):
         super().__init__()
         self.filter_conv = nn.Conv2d(feat_size, 64, 1)  # reduce filter size
-        self.conv1 = DynamicEdgeConv(
-            MLP(
-                [2 * (3 + 3 + 64), 64],
-                act="LeakyReLU",
-                act_kwargs={"negative_slope": 0.2},
-                dropout=0.5,
-            ),
-            k,
-            aggr,
-        )
-        self.conv2 = DynamicEdgeConv(
-            MLP(
-                [2 * 64, 64],
-                act="LeakyReLU",
-                act_kwargs={"negative_slope": 0.2},
-                dropout=0.5,
-            ),
-            k,
-            aggr,
-        )
-        self.conv3 = DynamicEdgeConv(
-            MLP(
-                [2 * 64, 128],
-                act="LeakyReLU",
-                act_kwargs={"negative_slope": 0.2},
-                dropout=0.5,
-            ),
-            k,
-            aggr,
-        )
-        self.conv4 = DynamicEdgeConv(
-            MLP(
-                [2 * 128, 256],
-                act="LeakyReLU",
-                act_kwargs={"negative_slope": 0.2},
-                dropout=0.5,
-            ),
-            k,
-            aggr,
-        )
-        self.fc1 = MLP(
-            [64 + 64 + 128 + 256, 1024],
-            act="LeakyReLU",
-            act_kwargs={"negative_slope": 0.2},
-            dropout=0.5,
-        )
+        self.conv1 = DynamicEdgeConv(MLP([2 * (3 + 3 + 64), 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
+        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
+        self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
+        self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5), k, aggr)
+        self.fc1 = MLP([64 + 64 + 128 + 256, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5)
         self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.5)
 
     def forward(self, data):
         # Feature Extraction must be in geomat.py so that torch_geometric can properly sample points
-        data.features = self.filter_conv(
-            torch.unsqueeze(torch.unsqueeze(data.features.cuda(), dim=-1), dim=-1)
-        ).squeeze()
+        data.features = self.filter_conv(torch.unsqueeze(torch.unsqueeze(data.features.cuda(), dim=-1), dim=-1)).squeeze()
         pos, x, batch, features = (
             data.pos.cuda(),
             data.x.cuda(),
@@ -152,6 +101,4 @@ optimizer = torch.optim.RAdam(model.parameters(), lr=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
 model_name = os.path.basename(__file__).rstrip(".py")
 
-run_training(
-    model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True
-)
+run_training(model_name, train, test, model, optimizer, scheduler, total_epochs=200, cm=True)

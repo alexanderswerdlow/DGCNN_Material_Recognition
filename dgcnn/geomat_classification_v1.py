@@ -11,9 +11,7 @@ import os.path
 from util import criterion, run_training, get_data_dir
 
 path = f"{get_data_dir()}/geomat"
-pre_transform, transform = T.NormalizeScale(), T.FixedPoints(
-    1024
-)  # T.SamplePoints(1024)
+pre_transform, transform = T.NormalizeScale(), T.FixedPoints(1024)  # T.SamplePoints(1024)
 train_dataset = GeoMat(path, True, transform, pre_transform)
 test_dataset = GeoMat(path, False, transform, pre_transform)
 train_loader = DataLoader(train_dataset, batch_size=24, shuffle=True, num_workers=6)
@@ -24,36 +22,11 @@ class Net(torch.nn.Module):
     def __init__(self, in_channels, out_channels, k=20, aggr="max"):
         super().__init__()
 
-        self.conv1 = DynamicEdgeConv(
-            MLP(
-                [2 * in_channels, 64],
-                act="LeakyReLU",
-                act_kwargs={"negative_slope": 0.2},
-            ),
-            k,
-            aggr,
-        )
-        self.conv2 = DynamicEdgeConv(
-            MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}),
-            k,
-            aggr,
-        )
-        self.conv3 = DynamicEdgeConv(
-            MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}),
-            k,
-            aggr,
-        )
-        self.conv4 = DynamicEdgeConv(
-            MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}),
-            k,
-            aggr,
-        )
-        self.fc1 = MLP(
-            [64 + 64 + 128 + 256, 1024],
-            act="LeakyReLU",
-            act_kwargs={"negative_slope": 0.2},
-            dropout=0.5,
-        )
+        self.conv1 = DynamicEdgeConv(MLP([2 * in_channels, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
+        self.conv2 = DynamicEdgeConv(MLP([2 * 64, 64], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
+        self.conv3 = DynamicEdgeConv(MLP([2 * 64, 128], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
+        self.conv4 = DynamicEdgeConv(MLP([2 * 128, 256], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}), k, aggr)
+        self.fc1 = MLP([64 + 64 + 128 + 256, 1024], act="LeakyReLU", act_kwargs={"negative_slope": 0.2}, dropout=0.5)
         self.fc2 = MLP([1024, 512, 256, out_channels], dropout=0.5)
 
     def forward(self, data):

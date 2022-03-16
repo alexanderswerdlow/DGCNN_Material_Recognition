@@ -4,3 +4,5 @@ data/
 __pycache__/
 runs/
 .DS_Store
+colab/geomat
+geomat.zip

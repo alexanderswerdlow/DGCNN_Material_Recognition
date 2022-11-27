@@ -1,5 +1,6 @@
 # Graph Convolution on RGBD data for material recognition
 
+The associated writeup can be found [here](https://ucladeepvision.github.io/CS188-Projects-2022Winter/2022/03/16/team24-3D-Graph-Conv.html)
 ## Structure
 - DGCNN Networks are in `dgcnn/`
 - Fusion networks are in `fusion/`
